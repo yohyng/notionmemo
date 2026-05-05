@@ -1,5 +1,5 @@
-const APP_VERSION = 'v0.3.1 diagnostics';
-const APP_BUILD = '2026-05-05';
+const APP_VERSION = 'v0.3.2 adaptive-schema';
+const APP_BUILD = '2026-05-06';
 
 const STORAGE_KEY = 'instant_memo_settings_v3_diagnostics';
 const QUEUE_KEY = 'instant_memo_queue_v3_diagnostics';
