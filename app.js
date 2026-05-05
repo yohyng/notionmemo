@@ -1,3 +1,6 @@
+const APP_VERSION = 'v0.3.1 diagnostics';
+const APP_BUILD = '2026-05-05';
+
 const STORAGE_KEY = 'instant_memo_settings_v3_diagnostics';
 const QUEUE_KEY = 'instant_memo_queue_v3_diagnostics';
 const CACHE_KEY = 'instant_memo_recent_cache_v3_diagnostics';
@@ -23,6 +26,11 @@ const els = {
   diagnosticsSteps: $('diagnosticsSteps'),
   diagnosticsRaw: $('diagnosticsRaw'),
   clearDiagnostics: $('clearDiagnosticsButton'),
+  versionBadge: $('versionBadge'),
+  versionDialog: $('versionDialog'),
+  closeVersion: $('closeVersionButton'),
+  versionNumber: $('versionNumber'),
+  versionBuild: $('versionBuild'),
   statusDot: $('statusDot'),
   statusText: $('statusText'),
   queueBadge: $('queueBadge'),
@@ -63,6 +71,11 @@ function init() {
   });
 
   els.clearDiagnostics.addEventListener('click', clearDiagnostics);
+  els.versionNumber.textContent = APP_VERSION;
+  els.versionBuild.textContent = APP_BUILD;
+  els.versionBadge.textContent = APP_VERSION;
+  els.versionBadge.addEventListener('click', () => els.versionDialog.showModal());
+  els.closeVersion.addEventListener('click', () => els.versionDialog.close());
   els.diagnose.addEventListener('click', runDiagnostics);
 
   els.send.addEventListener('click', createMemo);
@@ -102,6 +115,8 @@ async function runDiagnostics() {
     client: {
       userAgent: navigator.userAgent,
       online: navigator.onLine,
+      appVersion: APP_VERSION,
+      appBuild: APP_BUILD,
       endpointConfigured: Boolean(settings.endpoint),
       secretConfigured: Boolean(settings.secret),
       device: settings.device,

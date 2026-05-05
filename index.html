@@ -15,6 +15,7 @@
         <div class="brand">
           <p>Instant Memo</p>
           <h1>書き留める</h1>
+          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.3.1 diagnostics</button>
         </div>
         <div class="top-actions">
           <button id="refreshButton" class="circle-button" type="button" title="最新メモを取得">↻</button>
@@ -138,6 +139,34 @@
           <button id="updateButton" class="send-button" type="button">更新</button>
         </div>
       </footer>
+    </form>
+  </dialog>
+
+  <dialog id="versionDialog" class="version-dialog">
+    <form method="dialog" class="version-form">
+      <header class="edit-header">
+        <h2>Version</h2>
+        <button id="closeVersionButton" class="circle-button" type="button">×</button>
+      </header>
+      <dl class="version-list">
+        <div>
+          <dt>App</dt>
+          <dd>Instant Memo</dd>
+        </div>
+        <div>
+          <dt>Version</dt>
+          <dd id="versionNumber">v0.3.1 diagnostics</dd>
+        </div>
+        <div>
+          <dt>Build</dt>
+          <dd id="versionBuild">2026-05-05</dd>
+        </div>
+        <div>
+          <dt>Sync Model</dt>
+          <dd>Notion DB as source of truth</dd>
+        </div>
+      </dl>
+      <p class="version-note">接続診断・安全同期・複数デバイス参照に対応した版です。</p>
     </form>
   </dialog>
 
