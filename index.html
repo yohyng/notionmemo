@@ -31,7 +31,7 @@
       ></textarea>
 
       <section id="settingsPanel" class="settings-panel hidden">
-        <label>
+        <label class="span-2">
           <span>GAS Endpoint</span>
           <input id="endpointInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
         </label>
@@ -39,6 +39,11 @@
         <label>
           <span>App Secret</span>
           <input id="secretInput" type="password" placeholder="GAS側のAPP_SECRET" />
+        </label>
+
+        <label>
+          <span>Device</span>
+          <input id="deviceInput" type="text" placeholder="iPhone / iPad / PC" />
         </label>
 
         <label>
@@ -56,15 +61,26 @@
           <input id="categoryInput" type="text" placeholder="Memo" />
         </label>
 
-        <label>
-          <span>Device</span>
-          <input id="deviceInput" type="text" placeholder="iPhone / iPad / PC" />
-        </label>
-
-        <div class="settings-actions">
+        <div class="settings-actions span-2">
           <button id="saveSettingsButton" class="secondary-button" type="button">設定を保存</button>
+          <button id="diagnoseButton" class="secondary-button" type="button">接続診断</button>
           <button id="flushQueueButton" class="secondary-button" type="button">未送信を再送</button>
         </div>
+
+        <section id="diagnosticsPanel" class="diagnostics-panel span-2 hidden">
+          <header class="diagnostics-header">
+            <div>
+              <p>Connection Diagnostics</p>
+              <h3>接続チェック結果</h3>
+            </div>
+            <button id="clearDiagnosticsButton" class="mini-button" type="button">Clear</button>
+          </header>
+          <ol id="diagnosticsSteps" class="diagnostics-steps"></ol>
+          <details class="diagnostics-raw">
+            <summary>Raw response / error detail</summary>
+            <pre id="diagnosticsRaw"></pre>
+          </details>
+        </section>
       </section>
 
       <footer class="composer-footer">

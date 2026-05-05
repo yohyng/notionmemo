@@ -9,12 +9,11 @@
   --accent: #d7c7a7;
   --danger: #d98787;
   --success: #a9c8a0;
+  --warn: #dec67e;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html,
 body {
@@ -35,9 +34,7 @@ body {
 
 button,
 input,
-textarea {
-  font: inherit;
-}
+textarea { font: inherit; }
 
 button {
   cursor: pointer;
@@ -76,7 +73,8 @@ button {
 .edit-header,
 .edit-actions,
 .edit-right-actions,
-.settings-actions {
+.settings-actions,
+.diagnostics-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -84,7 +82,8 @@ button {
 }
 
 .brand p,
-.list-header p {
+.list-header p,
+.diagnostics-header p {
   margin: 0 0 8px;
   color: var(--muted);
   font-size: 12px;
@@ -99,10 +98,7 @@ button {
   letter-spacing: -0.08em;
 }
 
-.top-actions {
-  display: flex;
-  gap: 8px;
-}
+.top-actions { display: flex; gap: 8px; }
 
 .circle-button {
   width: 44px;
@@ -146,14 +142,11 @@ textarea::placeholder {
   background: rgba(0, 0, 0, 0.13);
 }
 
-.hidden {
-  display: none !important;
-}
+.span-2 { grid-column: 1 / -1; }
 
-label {
-  display: grid;
-  gap: 7px;
-}
+.hidden { display: none !important; }
+
+label { display: grid; gap: 7px; }
 
 label span {
   color: var(--muted);
@@ -177,13 +170,14 @@ input {
 }
 
 .settings-actions {
-  grid-column: 1 / -1;
   justify-content: flex-start;
+  flex-wrap: wrap;
 }
 
 .secondary-button,
 .send-button,
-.danger-button {
+.danger-button,
+.mini-button {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 12px 18px;
@@ -206,6 +200,80 @@ input {
   color: #1f1f1f;
   background: var(--danger);
   font-weight: 700;
+}
+
+.mini-button {
+  padding: 8px 12px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.045);
+  font-size: 12px;
+}
+
+.diagnostics-panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(0,0,0,0.18);
+}
+
+.diagnostics-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.diagnostics-steps {
+  margin: 14px 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.diagnostic-step {
+  display: grid;
+  grid-template-columns: 1.2rem minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.035);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.diagnostic-step strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.diagnostic-step.ok .diagnostic-icon { color: var(--success); }
+.diagnostic-step.error .diagnostic-icon { color: var(--danger); }
+.diagnostic-step.warn .diagnostic-icon { color: var(--warn); }
+.diagnostic-step.info .diagnostic-icon { color: var(--accent); }
+
+.diagnostics-raw {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.diagnostics-raw summary {
+  cursor: pointer;
+}
+
+.diagnostics-raw pre {
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.25);
+  color: #cfc8bd;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .composer-footer {
@@ -314,9 +382,7 @@ input {
   font-size: 11px;
 }
 
-.memo-tags {
-  margin-top: 10px;
-}
+.memo-tags { margin-top: 10px; }
 
 .memo-tag,
 .memo-category {
@@ -353,9 +419,7 @@ input {
   padding: 22px;
 }
 
-.edit-header h2 {
-  margin: 0;
-}
+.edit-header h2 { margin: 0; }
 
 .edit-textarea {
   min-height: 260px;
@@ -375,21 +439,16 @@ input {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
-  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1023px) {
-  .app {
-    grid-template-columns: 1fr;
-  }
+  .app { grid-template-columns: 1fr; }
 
   .composer-card {
     min-height: min(720px, calc(100dvh - 32px));
   }
 
-  .memo-list {
-    max-height: 50dvh;
-  }
+  .memo-list { max-height: 50dvh; }
 }
 
 @media (max-width: 640px) {
@@ -399,18 +458,14 @@ input {
   }
 
   .composer-card,
-  .list-card {
-    border-radius: 24px;
-  }
+  .list-card { border-radius: 24px; }
 
   .composer-card {
     min-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     padding: 18px;
   }
 
-  .brand h1 {
-    font-size: clamp(40px, 12vw, 56px);
-  }
+  .brand h1 { font-size: clamp(40px, 12vw, 56px); }
 
   .memo-input {
     min-height: 42dvh;
@@ -418,9 +473,7 @@ input {
   }
 
   .settings-panel,
-  .edit-grid {
-    grid-template-columns: 1fr;
-  }
+  .edit-grid { grid-template-columns: 1fr; }
 
   .composer-footer {
     flex-direction: column;

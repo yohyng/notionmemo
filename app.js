@@ -1,6 +1,6 @@
-const STORAGE_KEY = 'instant_memo_settings_v2';
-const QUEUE_KEY = 'instant_memo_queue_v2';
-const CACHE_KEY = 'instant_memo_recent_cache_v2';
+const STORAGE_KEY = 'instant_memo_settings_v3_diagnostics';
+const QUEUE_KEY = 'instant_memo_queue_v3_diagnostics';
+const CACHE_KEY = 'instant_memo_recent_cache_v3_diagnostics';
 
 const $ = (id) => document.getElementById(id);
 
@@ -18,6 +18,11 @@ const els = {
   send: $('sendButton'),
   refresh: $('refreshButton'),
   flushQueue: $('flushQueueButton'),
+  diagnose: $('diagnoseButton'),
+  diagnosticsPanel: $('diagnosticsPanel'),
+  diagnosticsSteps: $('diagnosticsSteps'),
+  diagnosticsRaw: $('diagnosticsRaw'),
+  clearDiagnostics: $('clearDiagnosticsButton'),
   statusDot: $('statusDot'),
   statusText: $('statusText'),
   queueBadge: $('queueBadge'),
@@ -57,6 +62,9 @@ function init() {
     els.memo.focus();
   });
 
+  els.clearDiagnostics.addEventListener('click', clearDiagnostics);
+  els.diagnose.addEventListener('click', runDiagnostics);
+
   els.send.addEventListener('click', createMemo);
   els.refresh.addEventListener('click', refreshList);
   els.flushQueue.addEventListener('click', flushQueue);
@@ -83,6 +91,163 @@ function init() {
   refreshList({ silent: true });
 }
 
+async function runDiagnostics() {
+  saveSettings();
+  clearDiagnostics();
+  els.diagnosticsPanel.classList.remove('hidden');
+  els.settingsPanel.classList.remove('hidden');
+
+  const settings = getSettings();
+  const raw = {
+    client: {
+      userAgent: navigator.userAgent,
+      online: navigator.onLine,
+      endpointConfigured: Boolean(settings.endpoint),
+      secretConfigured: Boolean(settings.secret),
+      device: settings.device,
+    },
+    checks: [],
+  };
+
+  function record(state, title, message, detail) {
+    addDiagnosticStep(state, title, message);
+    raw.checks.push({ state, title, message, detail });
+    els.diagnosticsRaw.textContent = JSON.stringify(raw, null, 2);
+  }
+
+  setStatus('接続診断中...', 'sending');
+
+  if (!settings.endpoint) {
+    record('error', '1. PWA設定', 'GAS Endpointが未入力です。', null);
+    setStatus('診断停止：GAS Endpoint未入力', 'error');
+    return;
+  }
+
+  if (!settings.secret) {
+    record('error', '1. PWA設定', 'App Secretが未入力です。GASのScript Propertiesに入れたAPP_SECRETと同じ値を入れてください。', null);
+    setStatus('診断停止：App Secret未入力', 'error');
+    return;
+  }
+
+  record('ok', '1. PWA設定', 'GAS EndpointとApp Secretは入力されています。', {
+    endpoint: maskEndpoint(settings.endpoint),
+  });
+
+  const pingUrl = settings.endpoint + (settings.endpoint.includes('?') ? '&' : '?') + 'diagnosticPing=' + Date.now();
+
+  try {
+    const pingResponse = await fetch(pingUrl, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    const pingText = await pingResponse.text();
+    const pingJson = safeJsonParse(pingText);
+
+    if (!pingResponse.ok) {
+      record('error', '2. GAS GET疎通', `HTTP ${pingResponse.status} で失敗しました。GASのデプロイ設定やURLを確認してください。`, {
+        status: pingResponse.status,
+        statusText: pingResponse.statusText,
+        body: pingText.slice(0, 800),
+      });
+      setStatus('診断停止：GAS GET失敗', 'error');
+      return;
+    }
+
+    if (!pingJson || !pingJson.ok) {
+      record('warn', '2. GAS GET疎通', 'レスポンスは返りましたが、期待したJSONではありません。GAS URLがWeb Appの/execになっているか確認してください。', {
+        status: pingResponse.status,
+        body: pingText.slice(0, 800),
+      });
+    } else {
+      record('ok', '2. GAS GET疎通', 'GAS Web AppのdoGet()に到達しました。', pingJson);
+    }
+  } catch (error) {
+    record('error', '2. GAS GET疎通', 'fetchに失敗しました。URL違い、GASの公開設定、ネットワーク、CORSが疑われます。', {
+      error: String(error),
+      hint: 'GASのデプロイ設定は「実行ユーザー：自分」「アクセスできるユーザー：全員」にしてください。',
+    });
+    setStatus('診断停止：GASに到達できません', 'error');
+    return;
+  }
+
+  const diagnoseResult = await callApiDetailed({ action: 'diagnose' });
+
+  raw.diagnoseTransport = diagnoseResult;
+
+  if (!diagnoseResult.transportOk) {
+    record('error', '3. GAS POST疎通', 'POSTに失敗しました。CORS、ネットワーク、GAS URLの可能性があります。', diagnoseResult);
+    setStatus('診断停止：POST失敗', 'error');
+    return;
+  }
+
+  if (!diagnoseResult.json) {
+    record('error', '3. GAS POST疎通', 'POSTのレスポンスがJSONとして読めませんでした。GASのエラー画面やHTMLが返っている可能性があります。', diagnoseResult);
+    setStatus('診断停止：JSON読取失敗', 'error');
+    return;
+  }
+
+  if (!diagnoseResult.data.ok) {
+    const msg = String(diagnoseResult.data.error || '');
+
+    if (msg.includes('Unauthorized')) {
+      record('error', '3. APP_SECRET認証', 'APP_SECRETが一致していません。GASのScript PropertiesのAPP_SECRETと、PWA設定のApp Secretを完全一致させてください。', diagnoseResult.data);
+      setStatus('診断停止：APP_SECRET不一致', 'error');
+      return;
+    }
+
+    record('error', '3. GAS診断API', 'GASのdiagnoseアクションがエラーを返しました。', diagnoseResult.data);
+    setStatus('診断停止：GAS診断エラー', 'error');
+    return;
+  }
+
+  record('ok', '3. APP_SECRET認証', 'APP_SECRETは一致しています。GASのdiagnoseアクションに到達しました。', diagnoseResult.data);
+
+  const gasSteps = Array.isArray(diagnoseResult.data.steps) ? diagnoseResult.data.steps : [];
+  gasSteps.forEach((step, index) => {
+    record(step.ok ? 'ok' : (step.warning ? 'warn' : 'error'), `4.${index + 1} ${step.name}`, step.message, step.detail || null);
+  });
+
+  const hasFatalGasStep = gasSteps.some((step) => !step.ok && !step.warning);
+  if (hasFatalGasStep) {
+    setStatus('診断完了：GAS/Notion側にエラーあり', 'error');
+    return;
+  }
+
+  const listResult = await callApiDetailed({ action: 'list', limit: 3 });
+  raw.listTransport = listResult;
+
+  if (!listResult.transportOk) {
+    record('error', '5. listアクション', 'Recent Memos取得のPOSTに失敗しました。', listResult);
+    setStatus('診断完了：list通信失敗', 'error');
+    return;
+  }
+
+  if (!listResult.json || !listResult.data.ok) {
+    record('error', '5. listアクション', 'Notion DBから最近のメモ取得に失敗しました。Sort対象の「日付」プロパティ名や型を確認してください。', listResult.data || listResult);
+    setStatus('診断完了：list失敗', 'error');
+    return;
+  }
+
+  record('ok', '5. listアクション', `Recent Memos取得に成功しました。取得件数: ${Array.isArray(listResult.data.items) ? listResult.data.items.length : 0}`, listResult.data);
+  setStatus('接続診断OK', 'success');
+}
+
+function clearDiagnostics() {
+  els.diagnosticsSteps.innerHTML = '';
+  els.diagnosticsRaw.textContent = '';
+}
+
+function addDiagnosticStep(state, title, message) {
+  const icon = state === 'ok' ? '✓' : state === 'warn' ? '!' : state === 'error' ? '×' : '•';
+  const item = document.createElement('li');
+  item.className = `diagnostic-step ${state}`;
+  item.innerHTML = `
+    <span class="diagnostic-icon">${icon}</span>
+    <span><strong>${escapeHtml(title)}</strong>${escapeHtml(message)}</span>
+  `;
+  els.diagnosticsSteps.appendChild(item);
+}
+
 async function createMemo() {
   const settings = getSettings();
   const memo = els.memo.value.trim();
@@ -102,7 +267,7 @@ async function createMemo() {
 
   const payload = {
     action: 'create',
-    clientId: createUuid(),
+    clientId: makeUuid(),
     memo,
     url: els.url.value.trim(),
     tags: splitTags(els.tags.value),
@@ -125,7 +290,7 @@ async function createMemo() {
   }
 
   enqueue(payload);
-  setStatus('送信失敗。未送信キューに保存しました', 'error');
+  showApiError('作成に失敗しました。未送信キューに保存しました。', res);
   renderQueueBadge();
 }
 
@@ -143,7 +308,7 @@ async function refreshList(options = {}) {
   const res = await callApi({ action: 'list', limit: 30 });
 
   if (!res.ok) {
-    if (!silent) setStatus('取得に失敗しました', 'error');
+    if (!silent) showApiError('取得に失敗しました', res);
     return;
   }
 
@@ -200,7 +365,7 @@ async function openMemo(pageId) {
   const res = await callApi({ action: 'get', pageId });
 
   if (!res.ok || !res.item) {
-    setStatus('メモの取得に失敗しました', 'error');
+    showApiError('メモの取得に失敗しました', res);
     return;
   }
 
@@ -253,18 +418,18 @@ async function updateMemo() {
     if (saveAsNew) {
       await duplicateMemo();
     } else {
-      setStatus('更新をキャンセルしました', 'error');
+      showApiError('更新をキャンセルしました', res);
     }
     return;
   }
 
-  setStatus('更新に失敗しました', 'error');
+  showApiError('更新に失敗しました', res);
 }
 
 async function duplicateMemo() {
   const payload = {
     action: 'create',
-    clientId: createUuid(),
+    clientId: makeUuid(),
     memo: els.editMemo.value.trim(),
     url: els.editUrl.value.trim(),
     tags: splitTags(els.editTags.value),
@@ -289,7 +454,7 @@ async function duplicateMemo() {
   }
 
   enqueue(payload);
-  setStatus('保存失敗。未送信キューに保存しました', 'error');
+  showApiError('保存失敗。未送信キューに保存しました', res);
   renderQueueBadge();
 }
 
@@ -314,11 +479,11 @@ async function trashMemo() {
   }
 
   if (res.conflict) {
-    setStatus('他のデバイスで更新されています。再取得してください', 'error');
+    showApiError('他のデバイスで更新されています。再取得してください', res);
     return;
   }
 
-  setStatus('削除に失敗しました', 'error');
+  showApiError('削除に失敗しました', res);
 }
 
 async function flushQueue() {
@@ -349,8 +514,35 @@ async function flushQueue() {
 }
 
 async function callApi(payload) {
+  const result = await callApiDetailed(payload);
+  if (!result.transportOk) {
+    return {
+      ok: false,
+      stage: 'transport',
+      error: result.error,
+      diagnostic: result,
+    };
+  }
+  if (!result.json) {
+    return {
+      ok: false,
+      stage: 'parse',
+      error: 'Response was not JSON',
+      diagnostic: result,
+    };
+  }
+  return result.data;
+}
+
+async function callApiDetailed(payload) {
   const settings = getSettings();
   const endpoint = settings.endpoint;
+
+  const requestInfo = {
+    endpoint: maskEndpoint(endpoint),
+    action: payload.action,
+    contentType: 'text/plain;charset=utf-8',
+  };
 
   try {
     const response = await fetch(endpoint, {
@@ -364,11 +556,78 @@ async function callApi(payload) {
       }),
     });
 
-    return await response.json();
+    const text = await response.text();
+    const data = safeJsonParse(text);
+
+    return {
+      transportOk: true,
+      httpOk: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      json: Boolean(data),
+      data,
+      rawTextPreview: text.slice(0, 1200),
+      requestInfo,
+    };
   } catch (error) {
-    console.warn('callApi failed', error);
-    return { ok: false, error: String(error) };
+    return {
+      transportOk: false,
+      error: String(error),
+      requestInfo,
+      hint: 'TypeError: Failed to fetch の場合は、GAS URL / 公開設定 / CORS / ネットワークを疑ってください。',
+    };
   }
+}
+
+function showApiError(message, res) {
+  setStatus(message, 'error');
+  els.settingsPanel.classList.remove('hidden');
+  els.diagnosticsPanel.classList.remove('hidden');
+
+  addDiagnosticStep('error', 'API Error', explainApiError(res));
+  els.diagnosticsRaw.textContent = JSON.stringify(res, null, 2);
+}
+
+function explainApiError(res) {
+  if (!res) return '詳細不明のエラーです。接続診断を実行してください。';
+
+  const raw = JSON.stringify(res);
+
+  if (String(res.error || '').includes('Unauthorized') || raw.includes('Unauthorized')) {
+    return 'APP_SECRETが一致していません。GASのScript PropertiesとPWA設定を確認してください。';
+  }
+
+  if (raw.includes('Missing NOTION_TOKEN')) {
+    return 'GASのScript PropertiesにNOTION_TOKENがありません。';
+  }
+
+  if (raw.includes('Missing NOTION_DATABASE_ID')) {
+    return 'GASのScript PropertiesにNOTION_DATABASE_IDがありません。';
+  }
+
+  if (raw.includes('object_not_found')) {
+    return 'Notion DBが見つかりません。DATABASE_ID違い、またはIntegration未接続の可能性があります。';
+  }
+
+  if (raw.includes('validation_error')) {
+    return 'Notion DBのプロパティ名または型がコードの想定と違う可能性があります。接続診断でプロパティチェックを確認してください。';
+  }
+
+  if (res.stage === 'transport') {
+    return 'GASへの通信に失敗しました。GAS URL、公開設定、CORS、ネットワークを確認してください。';
+  }
+
+  return String(res.error || messageFromNestedNotionError(res) || '接続診断を実行してください。');
+}
+
+function messageFromNestedNotionError(obj) {
+  try {
+    if (obj.error && obj.error.message) return obj.error.message;
+    if (obj.diagnostic && obj.diagnostic.data && obj.diagnostic.data.error) return JSON.stringify(obj.diagnostic.data.error);
+  } catch {
+    return '';
+  }
+  return '';
 }
 
 function enqueue(payload) {
@@ -437,17 +696,6 @@ function guessDeviceName() {
   return 'Unknown Device';
 }
 
-function createUuid() {
-  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-    return window.crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
 function splitTags(value) {
   return String(value || '')
     .split(',')
@@ -471,6 +719,14 @@ function formatDate(value) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 function escapeHtml(value) {
   return String(value || '')
     .replaceAll('&', '&amp;')
@@ -478,6 +734,19 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function maskEndpoint(endpoint) {
+  if (!endpoint) return '';
+  return endpoint.replace(/\/s\/([^/]+)\//, '/s/********/');
+}
+
+function makeUuid() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+
+  return 'client-' + Date.now() + '-' + Math.random().toString(36).slice(2);
 }
 
 async function registerServiceWorker() {
@@ -495,6 +764,9 @@ function runSelfTests() {
     ['makeTitle fallback', makeTitle('  \n  '), '新規ページ'],
     ['splitTags trims', JSON.stringify(splitTags(' a, ,b , c ')), JSON.stringify(['a', 'b', 'c'])],
     ['formatDate invalid passthrough', formatDate('not-date'), 'not-date'],
+    ['safeJsonParse valid', safeJsonParse('{"ok":true}').ok, true],
+    ['safeJsonParse invalid', safeJsonParse('<html>') === null, true],
+    ['makeUuid returns value', typeof makeUuid() === 'string' && makeUuid().length > 8, true],
   ];
 
   tests.forEach(([name, actual, expected]) => {
