@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.3.2 adaptive-schema';
+const APP_VERSION = 'v0.3.3 pwa-install';
 const APP_BUILD = '2026-05-06';
 
 const STORAGE_KEY = 'instant_memo_settings_v3_diagnostics';
@@ -117,6 +117,9 @@ async function runDiagnostics() {
       online: navigator.onLine,
       appVersion: APP_VERSION,
       appBuild: APP_BUILD,
+      displayModeStandalone: window.matchMedia('(display-mode: standalone)').matches,
+      manifestLinked: Boolean(document.querySelector('link[rel="manifest"]')),
+      serviceWorkerSupported: 'serviceWorker' in navigator,
       endpointConfigured: Boolean(settings.endpoint),
       secretConfigured: Boolean(settings.secret),
       device: settings.device,

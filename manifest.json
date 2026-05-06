@@ -1,22 +1,61 @@
 {
   "name": "Instant Memo",
   "short_name": "Memo",
-  "description": "Open, write, sync safely with Notion.",
-  "start_url": "./index.html",
+  "description": "Open, write, and sync memos safely with Notion.",
+  "start_url": "./index.html?source=pwa",
   "display": "standalone",
   "background_color": "#1f1f1f",
   "theme_color": "#1f1f1f",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='44' fill='%231f1f1f'/%3E%3Cpath d='M58 55h76M58 91h76M58 127h48' stroke='%23d7c7a7' stroke-width='13' stroke-linecap='round'/%3E%3C/svg%3E",
+      "src": "./icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='116' fill='%231f1f1f'/%3E%3Cpath d='M154 150h204M154 246h204M154 342h130' stroke='%23d7c7a7' stroke-width='34' stroke-linecap='round'/%3E%3C/svg%3E",
+      "src": "./icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "./",
+  "scope": "./",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
+  "shortcuts": [
+    {
+      "name": "New Memo",
+      "short_name": "New",
+      "description": "Open Instant Memo",
+      "url": "./index.html?shortcut=new-memo",
+      "icons": [
+        {
+          "src": "./icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
