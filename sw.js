@@ -1,4 +1,4 @@
-const CACHE_NAME = 'instant-memo-safe-sync-cache-v0.3.3-pwa-install';
+const CACHE_NAME = 'instant-memo-safe-sync-cache-v0.3.4-simple-memo-title-edit';
 const ASSETS = [
   './',
   './index.html',

@@ -15,9 +15,9 @@
     <section class="composer-card">
       <header class="topbar">
         <div class="brand">
-          <p>Instant Memo</p>
-          <h1>書き留める</h1>
-          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.3.3 pwa-install</button>
+          <p>Quick Notion Capture</p>
+          <h1>memo</h1>
+          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.3.4 simple-memo-title-edit</button>
         </div>
         <div class="top-actions">
           <button id="refreshButton" class="circle-button" type="button" title="最新メモを取得">↻</button>
@@ -115,6 +115,11 @@
         <button id="closeEditButton" class="circle-button" type="button">×</button>
       </header>
 
+      <label class="edit-title-label">
+        <span>Title</span>
+        <input id="editTitleInput" class="edit-title-input" type="text" placeholder="メモのタイトル" />
+      </label>
+
       <textarea id="editMemoInput" class="edit-textarea"></textarea>
 
       <div class="edit-grid">
@@ -157,7 +162,7 @@
         </div>
         <div>
           <dt>Version</dt>
-          <dd id="versionNumber">v0.3.3 pwa-install</dd>
+          <dd id="versionNumber">v0.3.4 simple-memo-title-edit</dd>
         </div>
         <div>
           <dt>Build</dt>
@@ -168,7 +173,7 @@
           <dd>Notion DB as source of truth</dd>
         </div>
       </dl>
-      <p class="version-note">AndroidのPWAインストール要件に合わせてPNGアイコンを同梱した版です。</p>
+      <p class="version-note">画面を簡素化し、Recent Memosからタイトル編集できる版です。</p>
     </form>
   </dialog>
 

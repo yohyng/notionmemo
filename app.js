@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.3.3 pwa-install';
+const APP_VERSION = 'v0.3.4 simple-memo-title-edit';
 const APP_BUILD = '2026-05-06';
 
 const STORAGE_KEY = 'instant_memo_settings_v3_diagnostics';
@@ -37,6 +37,7 @@ const els = {
   memoList: $('memoList'),
   editDialog: $('editDialog'),
   closeEdit: $('closeEditButton'),
+  editTitle: $('editTitleInput'),
   editMemo: $('editMemoInput'),
   editUrl: $('editUrlInput'),
   editTags: $('editTagsInput'),
@@ -388,6 +389,7 @@ async function openMemo(pageId) {
   }
 
   currentEditingMemo = res.item;
+  els.editTitle.value = res.item.title || makeTitle(res.item.memo || '');
   els.editMemo.value = res.item.memo || '';
   els.editUrl.value = res.item.url || '';
   els.editTags.value = Array.isArray(res.item.tags) ? res.item.tags.join(', ') : '';
@@ -408,6 +410,7 @@ async function updateMemo() {
     action: 'update',
     pageId: currentEditingMemo.pageId,
     expectedLastEditedTime: currentEditingMemo.lastEditedTime,
+    title: els.editTitle.value.trim(),
     memo: els.editMemo.value.trim(),
     url: els.editUrl.value.trim(),
     tags: splitTags(els.editTags.value),
@@ -448,6 +451,7 @@ async function duplicateMemo() {
   const payload = {
     action: 'create',
     clientId: makeUuid(),
+    title: els.editTitle.value.trim() || makeTitle(els.editMemo.value),
     memo: els.editMemo.value.trim(),
     url: els.editUrl.value.trim(),
     tags: splitTags(els.editTags.value),

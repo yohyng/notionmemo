@@ -1,7 +1,7 @@
 {
-  "name": "Instant Memo",
-  "short_name": "Memo",
-  "description": "Open, write, and sync memos safely with Notion.",
+  "name": "memo",
+  "short_name": "memo",
+  "description": "A simple memo capture app that syncs safely with Notion.",
   "start_url": "./index.html?source=pwa",
   "display": "standalone",
   "background_color": "#1f1f1f",
