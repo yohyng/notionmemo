@@ -647,6 +647,11 @@ input {
   border-top: none;
 }
 
+.settings-diag-row {
+  display: flex;
+  align-items: center;
+}
+
 .send-actions {
   display: flex;
   gap: 8px;

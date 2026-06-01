@@ -17,7 +17,7 @@
         <div class="brand">
           <p>Quick Notion Capture</p>
           <h1>memo</h1>
-          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.4.0 dual-db</button>
+          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.4.1 per-db-diag</button>
         </div>
         <div class="top-actions">
           <button id="refreshButton" class="circle-button" type="button" title="最新メモを取得">↻</button>
@@ -34,6 +34,8 @@
       ></textarea>
 
       <section id="settingsPanel" class="settings-panel hidden">
+
+        <!-- Note 送信先 -->
         <p class="settings-group-label span-2">Note 送信先</p>
         <label class="span-2">
           <span>Note Endpoint</span>
@@ -47,7 +49,25 @@
           <span>Note ボタン名</span>
           <input id="noteLabelInput" type="text" placeholder="Note" />
         </label>
+        <div class="span-2 settings-diag-row">
+          <button id="diagnoseNoteButton" class="secondary-button" type="button">接続診断</button>
+        </div>
+        <section id="diagnosticsNotePanel" class="diagnostics-panel span-2 hidden">
+          <header class="diagnostics-header">
+            <div>
+              <p>Note DB Diagnostics</p>
+              <h3>接続チェック結果</h3>
+            </div>
+            <button id="clearDiagnosticsNoteButton" class="mini-button" type="button">Clear</button>
+          </header>
+          <ol id="diagnosticsNoteSteps" class="diagnostics-steps"></ol>
+          <details class="diagnostics-raw">
+            <summary>Raw response / error detail</summary>
+            <pre id="diagnosticsNoteRaw"></pre>
+          </details>
+        </section>
 
+        <!-- Memo 送信先 -->
         <p class="settings-group-label span-2">Memo 送信先</p>
         <label class="span-2">
           <span>Memo Endpoint</span>
@@ -61,7 +81,25 @@
           <span>Memo ボタン名</span>
           <input id="memoLabelInput" type="text" placeholder="Memo" />
         </label>
+        <div class="span-2 settings-diag-row">
+          <button id="diagnoseMemoButton" class="secondary-button" type="button">接続診断</button>
+        </div>
+        <section id="diagnosticsMemoPanel" class="diagnostics-panel span-2 hidden">
+          <header class="diagnostics-header">
+            <div>
+              <p>Memo DB Diagnostics</p>
+              <h3>接続チェック結果</h3>
+            </div>
+            <button id="clearDiagnosticsMemoButton" class="mini-button" type="button">Clear</button>
+          </header>
+          <ol id="diagnosticsMemoSteps" class="diagnostics-steps"></ol>
+          <details class="diagnostics-raw">
+            <summary>Raw response / error detail</summary>
+            <pre id="diagnosticsMemoRaw"></pre>
+          </details>
+        </section>
 
+        <!-- 共通設定 -->
         <p class="settings-group-label span-2">共通設定</p>
         <label>
           <span>Device</span>
@@ -82,24 +120,9 @@
 
         <div class="settings-actions span-2">
           <button id="saveSettingsButton" class="secondary-button" type="button">設定を保存</button>
-          <button id="diagnoseButton" class="secondary-button" type="button">接続診断</button>
           <button id="flushQueueButton" class="secondary-button" type="button">未送信を再送</button>
         </div>
 
-        <section id="diagnosticsPanel" class="diagnostics-panel span-2 hidden">
-          <header class="diagnostics-header">
-            <div>
-              <p>Connection Diagnostics</p>
-              <h3>接続チェック結果</h3>
-            </div>
-            <button id="clearDiagnosticsButton" class="mini-button" type="button">Clear</button>
-          </header>
-          <ol id="diagnosticsSteps" class="diagnostics-steps"></ol>
-          <details class="diagnostics-raw">
-            <summary>Raw response / error detail</summary>
-            <pre id="diagnosticsRaw"></pre>
-          </details>
-        </section>
       </section>
 
       <footer class="composer-footer">
@@ -181,7 +204,7 @@
         </div>
         <div>
           <dt>Version</dt>
-          <dd id="versionNumber">v0.4.0 dual-db</dd>
+          <dd id="versionNumber">v0.4.1 per-db-diag</dd>
         </div>
         <div>
           <dt>Build</dt>
@@ -192,7 +215,7 @@
           <dd>Notion DB as source of truth</dd>
         </div>
       </dl>
-      <p class="version-note">Note / Memo の2つの送信先DBをそれぞれ設定できる版です。</p>
+      <p class="version-note">Note / Memo それぞれに独立した接続診断を追加した版です。</p>
     </form>
   </dialog>
 

@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.4.0 dual-db';
+const APP_VERSION = 'v0.4.1 per-db-diag';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -26,11 +26,16 @@ const els = {
   sendMemo: $('sendMemoButton'),
   refresh: $('refreshButton'),
   flushQueue: $('flushQueueButton'),
-  diagnose: $('diagnoseButton'),
-  diagnosticsPanel: $('diagnosticsPanel'),
-  diagnosticsSteps: $('diagnosticsSteps'),
-  diagnosticsRaw: $('diagnosticsRaw'),
-  clearDiagnostics: $('clearDiagnosticsButton'),
+  diagnoseNote: $('diagnoseNoteButton'),
+  diagnoseMemo: $('diagnoseMemoButton'),
+  diagnosticsNotePanel: $('diagnosticsNotePanel'),
+  diagnosticsNoteSteps: $('diagnosticsNoteSteps'),
+  diagnosticsNoteRaw: $('diagnosticsNoteRaw'),
+  clearDiagnosticsNote: $('clearDiagnosticsNoteButton'),
+  diagnosticsMemoPanel: $('diagnosticsMemoPanel'),
+  diagnosticsMemoSteps: $('diagnosticsMemoSteps'),
+  diagnosticsMemoRaw: $('diagnosticsMemoRaw'),
+  clearDiagnosticsMemo: $('clearDiagnosticsMemoButton'),
   versionBadge: $('versionBadge'),
   versionDialog: $('versionDialog'),
   closeVersion: $('closeVersionButton'),
@@ -78,13 +83,16 @@ function init() {
     els.memo.focus();
   });
 
-  els.clearDiagnostics.addEventListener('click', clearDiagnostics);
   els.versionNumber.textContent = APP_VERSION;
   els.versionBuild.textContent = APP_BUILD;
   els.versionBadge.textContent = APP_VERSION;
   els.versionBadge.addEventListener('click', () => els.versionDialog.showModal());
   els.closeVersion.addEventListener('click', () => els.versionDialog.close());
-  els.diagnose.addEventListener('click', runDiagnostics);
+
+  els.diagnoseNote.addEventListener('click', () => runDiagnostics('note'));
+  els.diagnoseMemo.addEventListener('click', () => runDiagnostics('memo'));
+  els.clearDiagnosticsNote.addEventListener('click', () => clearDiagnostics('note'));
+  els.clearDiagnosticsMemo.addEventListener('click', () => clearDiagnostics('memo'));
 
   els.sendNote.addEventListener('click', () => createMemo('note'));
   els.sendMemo.addEventListener('click', () => createMemo('memo'));
@@ -119,92 +127,88 @@ function updateSendButtonLabels() {
   els.sendMemo.textContent = settings.memoLabel || 'Memo';
 }
 
-async function runDiagnostics() {
+// --- Diagnostics helpers ---
+
+function getDiagEls_(target) {
+  return target === 'memo'
+    ? { panel: els.diagnosticsMemoPanel, steps: els.diagnosticsMemoSteps, raw: els.diagnosticsMemoRaw }
+    : { panel: els.diagnosticsNotePanel, steps: els.diagnosticsNoteSteps, raw: els.diagnosticsNoteRaw };
+}
+
+function clearDiagnostics(target) {
+  const d = getDiagEls_(target);
+  d.steps.innerHTML = '';
+  d.raw.textContent = '';
+}
+
+function addDiagnosticStep(target, state, title, message) {
+  const d = getDiagEls_(target);
+  const icon = state === 'ok' ? '✓' : state === 'warn' ? '!' : state === 'error' ? '×' : '•';
+  const item = document.createElement('li');
+  item.className = `diagnostic-step ${state}`;
+  item.innerHTML = `
+    <span class="diagnostic-icon">${icon}</span>
+    <span><strong>${escapeHtml(title)}</strong>${escapeHtml(message)}</span>
+  `;
+  d.steps.appendChild(item);
+}
+
+async function runDiagnostics(target = 'note') {
   saveSettings();
-  clearDiagnostics();
-  els.diagnosticsPanel.classList.remove('hidden');
+  const d = getDiagEls_(target);
+  clearDiagnostics(target);
+  d.panel.classList.remove('hidden');
   els.settingsPanel.classList.remove('hidden');
 
   const settings = getSettings();
-  const raw = {
-    client: {
-      userAgent: navigator.userAgent,
-      online: navigator.onLine,
-      appVersion: APP_VERSION,
-      appBuild: APP_BUILD,
-      displayModeStandalone: window.matchMedia('(display-mode: standalone)').matches,
-      manifestLinked: Boolean(document.querySelector('link[rel="manifest"]')),
-      serviceWorkerSupported: 'serviceWorker' in navigator,
-      noteEndpointConfigured: Boolean(settings.noteEndpoint),
-      noteSecretConfigured: Boolean(settings.noteSecret),
-      device: settings.device,
-    },
-    checks: [],
-  };
+  const endpoint = target === 'memo' ? settings.memoEndpoint : settings.noteEndpoint;
+  const secret   = target === 'memo' ? settings.memoSecret   : settings.noteSecret;
+  const label    = target === 'memo' ? (settings.memoLabel || 'Memo') : (settings.noteLabel || 'Note');
+
+  const raw = { client: { userAgent: navigator.userAgent, online: navigator.onLine, appVersion: APP_VERSION, target }, checks: [] };
 
   function record(state, title, message, detail) {
-    addDiagnosticStep(state, title, message);
+    addDiagnosticStep(target, state, title, message);
     raw.checks.push({ state, title, message, detail });
-    els.diagnosticsRaw.textContent = JSON.stringify(raw, null, 2);
+    d.raw.textContent = JSON.stringify(raw, null, 2);
   }
 
-  setStatus('接続診断中（Note）...', 'sending');
+  setStatus(`接続診断中（${label}）...`, 'sending');
 
-  if (!settings.noteEndpoint) {
-    record('error', '1. Note設定', 'Note Endpointが未入力です。', null);
-    setStatus('診断停止：Note Endpoint未入力', 'error');
+  if (!endpoint) {
+    record('error', '1. 設定', `${label} Endpointが未入力です。`, null);
+    setStatus(`診断停止：${label} Endpoint未入力`, 'error');
     return;
   }
-
-  if (!settings.noteSecret) {
-    record('error', '1. Note設定', 'Note Secretが未入力です。GASのScript PropertiesのAPP_SECRETと同じ値を入れてください。', null);
-    setStatus('診断停止：Note Secret未入力', 'error');
+  if (!secret) {
+    record('error', '1. 設定', `${label} Secretが未入力です。`, null);
+    setStatus(`診断停止：${label} Secret未入力`, 'error');
     return;
   }
+  record('ok', '1. 設定', `${label} EndpointとSecretは入力されています。`, { endpoint: maskEndpoint(endpoint) });
 
-  record('ok', '1. Note設定', 'Note EndpointとNote Secretは入力されています。', {
-    endpoint: maskEndpoint(settings.noteEndpoint),
-  });
-
-  const pingUrl = settings.noteEndpoint + (settings.noteEndpoint.includes('?') ? '&' : '?') + 'diagnosticPing=' + Date.now();
-
+  const pingUrl = endpoint + (endpoint.includes('?') ? '&' : '?') + 'diagnosticPing=' + Date.now();
   try {
-    const pingResponse = await fetch(pingUrl, {
-      method: 'GET',
-      cache: 'no-store',
-    });
+    const pingResponse = await fetch(pingUrl, { method: 'GET', cache: 'no-store' });
     const pingText = await pingResponse.text();
     const pingJson = safeJsonParse(pingText);
-
     if (!pingResponse.ok) {
-      record('error', '2. GAS GET疎通', `HTTP ${pingResponse.status} で失敗しました。GASのデプロイ設定やURLを確認してください。`, {
-        status: pingResponse.status,
-        statusText: pingResponse.statusText,
-        body: pingText.slice(0, 800),
-      });
+      record('error', '2. GAS GET疎通', `HTTP ${pingResponse.status} で失敗しました。GASのデプロイ設定やURLを確認してください。`, { status: pingResponse.status, body: pingText.slice(0, 800) });
       setStatus('診断停止：GAS GET失敗', 'error');
       return;
     }
-
     if (!pingJson || !pingJson.ok) {
-      record('warn', '2. GAS GET疎通', 'レスポンスは返りましたが、期待したJSONではありません。GAS URLがWeb Appの/execになっているか確認してください。', {
-        status: pingResponse.status,
-        body: pingText.slice(0, 800),
-      });
+      record('warn', '2. GAS GET疎通', 'レスポンスは返りましたが、期待したJSONではありません。GAS URLがWeb Appの/execになっているか確認してください。', { status: pingResponse.status, body: pingText.slice(0, 800) });
     } else {
       record('ok', '2. GAS GET疎通', 'GAS Web AppのdoGet()に到達しました。', pingJson);
     }
   } catch (error) {
-    record('error', '2. GAS GET疎通', 'fetchに失敗しました。URL違い、GASの公開設定、ネットワーク、CORSが疑われます。', {
-      error: String(error),
-      hint: 'GASのデプロイ設定は「実行ユーザー：自分」「アクセスできるユーザー：全員」にしてください。',
-    });
+    record('error', '2. GAS GET疎通', 'fetchに失敗しました。URL違い、GASの公開設定、ネットワーク、CORSが疑われます。', { error: String(error) });
     setStatus('診断停止：GASに到達できません', 'error');
     return;
   }
 
-  const diagnoseResult = await callApiDetailed({ action: 'diagnose' }, settings.noteEndpoint, settings.noteSecret);
-
+  const diagnoseResult = await callApiDetailed({ action: 'diagnose', _diagTarget: target }, endpoint, secret);
   raw.diagnoseTransport = diagnoseResult;
 
   if (!diagnoseResult.transportOk) {
@@ -212,22 +216,18 @@ async function runDiagnostics() {
     setStatus('診断停止：POST失敗', 'error');
     return;
   }
-
   if (!diagnoseResult.json) {
-    record('error', '3. GAS POST疎通', 'POSTのレスポンスがJSONとして読めませんでした。GASのエラー画面やHTMLが返っている可能性があります。', diagnoseResult);
+    record('error', '3. GAS POST疎通', 'POSTのレスポンスがJSONとして読めませんでした。', diagnoseResult);
     setStatus('診断停止：JSON読取失敗', 'error');
     return;
   }
-
   if (!diagnoseResult.data.ok) {
     const msg = String(diagnoseResult.data.error || '');
-
     if (msg.includes('Unauthorized')) {
-      record('error', '3. APP_SECRET認証', 'APP_SECRETが一致していません。GASのScript PropertiesのAPP_SECRETと、Note Secretを完全一致させてください。', diagnoseResult.data);
+      record('error', '3. APP_SECRET認証', `APP_SECRETが一致していません。GASのScript PropertiesのAPP_SECRETと、${label} Secretを完全一致させてください。`, diagnoseResult.data);
       setStatus('診断停止：APP_SECRET不一致', 'error');
       return;
     }
-
     record('error', '3. GAS診断API', 'GASのdiagnoseアクションがエラーを返しました。', diagnoseResult.data);
     setStatus('診断停止：GAS診断エラー', 'error');
     return;
@@ -242,57 +242,40 @@ async function runDiagnostics() {
 
   const hasFatalGasStep = gasSteps.some((step) => !step.ok && !step.warning);
   if (hasFatalGasStep) {
-    setStatus('診断完了：GAS/Notion側にエラーあり', 'error');
+    setStatus(`診断完了：GAS/Notion側にエラーあり（${label}）`, 'error');
     return;
   }
 
-  const listResult = await callApiDetailed({ action: 'list', limit: 3 }, settings.noteEndpoint, settings.noteSecret);
-  raw.listTransport = listResult;
-
-  if (!listResult.transportOk) {
-    record('error', '5. listアクション', 'Recent Memos取得のPOSTに失敗しました。', listResult);
-    setStatus('診断完了：list通信失敗', 'error');
-    return;
+  if (target === 'note') {
+    const listResult = await callApiDetailed({ action: 'list', limit: 3 }, endpoint, secret);
+    raw.listTransport = listResult;
+    if (!listResult.transportOk) {
+      record('error', '5. listアクション', 'Recent Memos取得のPOSTに失敗しました。', listResult);
+      setStatus('診断完了：list通信失敗', 'error');
+      return;
+    }
+    if (!listResult.json || !listResult.data.ok) {
+      record('error', '5. listアクション', 'Notion DBから最近のメモ取得に失敗しました。Sort対象の「日付」プロパティ名や型を確認してください。', listResult.data || listResult);
+      setStatus('診断完了：list失敗', 'error');
+      return;
+    }
+    record('ok', '5. listアクション', `Recent Memos取得に成功しました。取得件数: ${Array.isArray(listResult.data.items) ? listResult.data.items.length : 0}`, listResult.data);
   }
 
-  if (!listResult.json || !listResult.data.ok) {
-    record('error', '5. listアクション', 'Notion DBから最近のメモ取得に失敗しました。Sort対象の「日付」プロパティ名や型を確認してください。', listResult.data || listResult);
-    setStatus('診断完了：list失敗', 'error');
-    return;
-  }
-
-  record('ok', '5. listアクション', `Recent Memos取得に成功しました。取得件数: ${Array.isArray(listResult.data.items) ? listResult.data.items.length : 0}`, listResult.data);
-  setStatus('接続診断OK（Note）', 'success');
+  setStatus(`接続診断OK（${label}）`, 'success');
 }
 
-function clearDiagnostics() {
-  els.diagnosticsSteps.innerHTML = '';
-  els.diagnosticsRaw.textContent = '';
-}
-
-function addDiagnosticStep(state, title, message) {
-  const icon = state === 'ok' ? '✓' : state === 'warn' ? '!' : state === 'error' ? '×' : '•';
-  const item = document.createElement('li');
-  item.className = `diagnostic-step ${state}`;
-  item.innerHTML = `
-    <span class="diagnostic-icon">${icon}</span>
-    <span><strong>${escapeHtml(title)}</strong>${escapeHtml(message)}</span>
-  `;
-  els.diagnosticsSteps.appendChild(item);
-}
+// --- Memo CRUD ---
 
 async function createMemo(target = 'note') {
   const settings = getSettings();
   const memo = els.memo.value.trim();
 
   const endpoint = target === 'memo' ? settings.memoEndpoint : settings.noteEndpoint;
-  const secret = target === 'memo' ? settings.memoSecret : settings.noteSecret;
-  const label = target === 'memo' ? (settings.memoLabel || 'Memo') : (settings.noteLabel || 'Note');
+  const secret   = target === 'memo' ? settings.memoSecret   : settings.noteSecret;
+  const label    = target === 'memo' ? (settings.memoLabel || 'Memo') : (settings.noteLabel || 'Note');
 
-  if (!memo) {
-    setStatus('メモが空です', 'error');
-    return;
-  }
+  if (!memo) { setStatus('メモが空です', 'error'); return; }
 
   if (!endpoint || !secret) {
     setStatus(`${label}のEndpointとSecretを設定してください`, 'error');
@@ -315,7 +298,6 @@ async function createMemo(target = 'note') {
   };
 
   setStatus(`${label}に送信中...`, 'sending');
-
   const res = await callApi(payload, endpoint, secret);
 
   if (res.ok) {
@@ -328,7 +310,7 @@ async function createMemo(target = 'note') {
   }
 
   enqueue(payload);
-  showApiError(`${label}への作成に失敗しました。未送信キューに保存しました。`, res);
+  showApiError(`${label}への作成に失敗しました。未送信キューに保存しました。`, res, target);
   renderQueueBadge();
 }
 
@@ -342,18 +324,16 @@ async function refreshList(options = {}) {
   }
 
   if (!silent) setStatus('Notion DBを取得中...', 'sending');
-
   const res = await callApi({ action: 'list', limit: 30 }, settings.noteEndpoint, settings.noteSecret);
 
   if (!res.ok) {
-    if (!silent) showApiError('取得に失敗しました', res);
+    if (!silent) showApiError('取得に失敗しました', res, 'note');
     return;
   }
 
   const items = Array.isArray(res.items) ? res.items : [];
   localStorage.setItem(CACHE_KEY, JSON.stringify(items));
   renderList(items);
-
   if (!silent) setStatus('最新メモを取得しました', 'success');
 }
 
@@ -373,11 +353,11 @@ function renderList(items) {
   }
 
   els.memoList.innerHTML = items.map((item) => {
-    const title = escapeHtml(item.title || makeTitle(item.memo || ''));
-    const memo = escapeHtml(item.memo || '');
-    const date = escapeHtml(formatDate(item.date || item.createdTime || item.lastEditedTime || ''));
+    const title    = escapeHtml(item.title || makeTitle(item.memo || ''));
+    const memo     = escapeHtml(item.memo || '');
+    const date     = escapeHtml(formatDate(item.date || item.createdTime || item.lastEditedTime || ''));
     const category = escapeHtml(item.category || 'Memo');
-    const tags = Array.isArray(item.tags) ? item.tags : [];
+    const tags     = Array.isArray(item.tags) ? item.tags : [];
 
     return `
       <button class="memo-item" type="button" data-page-id="${escapeHtml(item.pageId)}">
@@ -403,16 +383,13 @@ async function openMemo(pageId) {
   const settings = getSettings();
   const res = await callApi({ action: 'get', pageId }, settings.noteEndpoint, settings.noteSecret);
 
-  if (!res.ok || !res.item) {
-    showApiError('メモの取得に失敗しました', res);
-    return;
-  }
+  if (!res.ok || !res.item) { showApiError('メモの取得に失敗しました', res, 'note'); return; }
 
   currentEditingMemo = res.item;
-  els.editTitle.value = res.item.title || makeTitle(res.item.memo || '');
-  els.editMemo.value = res.item.memo || '';
-  els.editUrl.value = res.item.url || '';
-  els.editTags.value = Array.isArray(res.item.tags) ? res.item.tags.join(', ') : '';
+  els.editTitle.value    = res.item.title || makeTitle(res.item.memo || '');
+  els.editMemo.value     = res.item.memo || '';
+  els.editUrl.value      = res.item.url || '';
+  els.editTags.value     = Array.isArray(res.item.tags) ? res.item.tags.join(', ') : '';
   els.editCategory.value = res.item.category || '';
   els.editMeta.textContent = `page_id: ${res.item.pageId} / last_edited_time: ${res.item.lastEditedTime || '-'}`;
   els.editDialog.showModal();
@@ -440,10 +417,7 @@ async function updateMemo() {
     date: currentEditingMemo.date || new Date().toISOString(),
   };
 
-  if (!payload.memo) {
-    setStatus('メモが空です', 'error');
-    return;
-  }
+  if (!payload.memo) { setStatus('メモが空です', 'error'); return; }
 
   setStatus('更新中...', 'sending');
   const res = await callApi(payload, settings.noteEndpoint, settings.noteSecret);
@@ -457,15 +431,11 @@ async function updateMemo() {
 
   if (res.conflict) {
     const saveAsNew = window.confirm('他のデバイスで更新されています。上書きせず、別メモとして保存しますか？');
-    if (saveAsNew) {
-      await duplicateMemo();
-    } else {
-      showApiError('更新をキャンセルしました', res);
-    }
+    if (saveAsNew) { await duplicateMemo(); } else { showApiError('更新をキャンセルしました', res, 'note'); }
     return;
   }
 
-  showApiError('更新に失敗しました', res);
+  showApiError('更新に失敗しました', res, 'note');
 }
 
 async function duplicateMemo() {
@@ -483,10 +453,7 @@ async function duplicateMemo() {
     _target: 'note',
   };
 
-  if (!payload.memo) {
-    setStatus('メモが空です', 'error');
-    return;
-  }
+  if (!payload.memo) { setStatus('メモが空です', 'error'); return; }
 
   setStatus('別メモとして保存中...', 'sending');
   const res = await callApi(payload, settings.noteEndpoint, settings.noteSecret);
@@ -499,7 +466,7 @@ async function duplicateMemo() {
   }
 
   enqueue(payload);
-  showApiError('保存失敗。未送信キューに保存しました', res);
+  showApiError('保存失敗。未送信キューに保存しました', res, 'note');
   renderQueueBadge();
 }
 
@@ -524,30 +491,23 @@ async function trashMemo() {
     return;
   }
 
-  if (res.conflict) {
-    showApiError('他のデバイスで更新されています。再取得してください', res);
-    return;
-  }
-
-  showApiError('削除に失敗しました', res);
+  if (res.conflict) { showApiError('他のデバイスで更新されています。再取得してください', res, 'note'); return; }
+  showApiError('削除に失敗しました', res, 'note');
 }
 
 async function flushQueue() {
   const queue = getQueue();
   const settings = getSettings();
 
-  if (!queue.length) {
-    setStatus('未送信メモはありません', 'idle');
-    return;
-  }
+  if (!queue.length) { setStatus('未送信メモはありません', 'idle'); return; }
 
   setStatus(`未送信 ${queue.length} 件を再送中...`, 'sending');
 
   const rest = [];
   for (const item of queue) {
-    const target = item._target || 'note';
+    const target   = item._target || 'note';
     const endpoint = target === 'memo' ? settings.memoEndpoint : settings.noteEndpoint;
-    const secret = target === 'memo' ? settings.memoSecret : settings.noteSecret;
+    const secret   = target === 'memo' ? settings.memoSecret   : settings.noteSecret;
     const res = await callApi(item, endpoint, secret);
     if (!res.ok) rest.push(item);
   }
@@ -563,107 +523,50 @@ async function flushQueue() {
   }
 }
 
+// --- API ---
+
 async function callApi(payload, endpoint, secret) {
   const result = await callApiDetailed(payload, endpoint, secret);
-  if (!result.transportOk) {
-    return {
-      ok: false,
-      stage: 'transport',
-      error: result.error,
-      diagnostic: result,
-    };
-  }
-  if (!result.json) {
-    return {
-      ok: false,
-      stage: 'parse',
-      error: 'Response was not JSON',
-      diagnostic: result,
-    };
-  }
+  if (!result.transportOk) return { ok: false, stage: 'transport', error: result.error, diagnostic: result };
+  if (!result.json)        return { ok: false, stage: 'parse',     error: 'Response was not JSON', diagnostic: result };
   return result.data;
 }
 
 async function callApiDetailed(payload, endpoint, secret) {
-  const requestInfo = {
-    endpoint: maskEndpoint(endpoint),
-    action: payload.action,
-    contentType: 'text/plain;charset=utf-8',
-  };
+  const requestInfo = { endpoint: maskEndpoint(endpoint), action: payload.action };
 
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify({
-        secret,
-        ...payload,
-      }),
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ secret, ...payload }),
     });
-
     const text = await response.text();
     const data = safeJsonParse(text);
-
-    return {
-      transportOk: true,
-      httpOk: response.ok,
-      status: response.status,
-      statusText: response.statusText,
-      json: Boolean(data),
-      data,
-      rawTextPreview: text.slice(0, 1200),
-      requestInfo,
-    };
+    return { transportOk: true, httpOk: response.ok, status: response.status, statusText: response.statusText, json: Boolean(data), data, rawTextPreview: text.slice(0, 1200), requestInfo };
   } catch (error) {
-    return {
-      transportOk: false,
-      error: String(error),
-      requestInfo,
-      hint: 'TypeError: Failed to fetch の場合は、GAS URL / 公開設定 / CORS / ネットワークを疑ってください。',
-    };
+    return { transportOk: false, error: String(error), requestInfo, hint: 'TypeError: Failed to fetch の場合は、GAS URL / 公開設定 / CORS / ネットワークを疑ってください。' };
   }
 }
 
-function showApiError(message, res) {
+function showApiError(message, res, target = 'note') {
   setStatus(message, 'error');
+  const d = getDiagEls_(target);
   els.settingsPanel.classList.remove('hidden');
-  els.diagnosticsPanel.classList.remove('hidden');
-
-  addDiagnosticStep('error', 'API Error', explainApiError(res));
-  els.diagnosticsRaw.textContent = JSON.stringify(res, null, 2);
+  d.panel.classList.remove('hidden');
+  addDiagnosticStep(target, 'error', 'API Error', explainApiError(res));
+  d.raw.textContent = JSON.stringify(res, null, 2);
 }
 
 function explainApiError(res) {
   if (!res) return '詳細不明のエラーです。接続診断を実行してください。';
-
   const raw = JSON.stringify(res);
-
-  if (String(res.error || '').includes('Unauthorized') || raw.includes('Unauthorized')) {
-    return 'APP_SECRETが一致していません。GASのScript PropertiesとSecretを確認してください。';
-  }
-
-  if (raw.includes('Missing NOTION_TOKEN')) {
-    return 'GASのScript PropertiesにNOTION_TOKENがありません。';
-  }
-
-  if (raw.includes('Missing NOTION_DATABASE_ID')) {
-    return 'GASのScript PropertiesにNOTION_DATABASE_IDがありません。';
-  }
-
-  if (raw.includes('object_not_found')) {
-    return 'Notion DBが見つかりません。DATABASE_ID違い、またはIntegration未接続の可能性があります。';
-  }
-
-  if (raw.includes('validation_error')) {
-    return 'Notion DBのプロパティ名または型がコードの想定と違う可能性があります。接続診断でプロパティチェックを確認してください。';
-  }
-
-  if (res.stage === 'transport') {
-    return 'GASへの通信に失敗しました。GAS URL、公開設定、CORS、ネットワークを確認してください。';
-  }
-
+  if (String(res.error || '').includes('Unauthorized') || raw.includes('Unauthorized')) return 'APP_SECRETが一致していません。GASのScript PropertiesとSecretを確認してください。';
+  if (raw.includes('Missing NOTION_TOKEN'))       return 'GASのScript PropertiesにNOTION_TOKENがありません。';
+  if (raw.includes('Missing NOTION_DATABASE_ID')) return 'GASのScript PropertiesにNOTION_DATABASE_IDがありません。';
+  if (raw.includes('object_not_found'))           return 'Notion DBが見つかりません。DATABASE_ID違い、またはIntegration未接続の可能性があります。';
+  if (raw.includes('validation_error'))           return 'Notion DBのプロパティ名または型がコードの想定と違う可能性があります。接続診断でプロパティチェックを確認してください。';
+  if (res.stage === 'transport')                  return 'GASへの通信に失敗しました。GAS URL、公開設定、CORS、ネットワークを確認してください。';
   return String(res.error || messageFromNestedNotionError(res) || '接続診断を実行してください。');
 }
 
@@ -671,11 +574,11 @@ function messageFromNestedNotionError(obj) {
   try {
     if (obj.error && obj.error.message) return obj.error.message;
     if (obj.diagnostic && obj.diagnostic.data && obj.diagnostic.data.error) return JSON.stringify(obj.diagnostic.data.error);
-  } catch {
-    return '';
-  }
+  } catch { return ''; }
   return '';
 }
+
+// --- Queue ---
 
 function enqueue(payload) {
   const queue = getQueue();
@@ -684,11 +587,7 @@ function enqueue(payload) {
 }
 
 function getQueue() {
-  try {
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; }
 }
 
 function renderQueueBadge() {
@@ -697,22 +596,26 @@ function renderQueueBadge() {
   els.queueBadge.classList.toggle('hidden', count === 0);
 }
 
+// --- Status ---
+
 function setStatus(text, state = 'idle') {
   els.statusText.textContent = text;
   els.statusDot.className = `status-dot ${state}`;
 }
 
+// --- Settings ---
+
 function getSettings() {
   return {
     noteEndpoint: els.noteEndpoint.value.trim(),
-    noteSecret: els.noteSecret.value.trim(),
-    noteLabel: els.noteLabel.value.trim(),
+    noteSecret:   els.noteSecret.value.trim(),
+    noteLabel:    els.noteLabel.value.trim(),
     memoEndpoint: els.memoEndpoint.value.trim(),
-    memoSecret: els.memoSecret.value.trim(),
-    memoLabel: els.memoLabel.value.trim(),
-    tags: els.tags.value.trim(),
-    category: els.category.value.trim(),
-    device: els.device.value.trim(),
+    memoSecret:   els.memoSecret.value.trim(),
+    memoLabel:    els.memoLabel.value.trim(),
+    tags:         els.tags.value.trim(),
+    category:     els.category.value.trim(),
+    device:       els.device.value.trim(),
   };
 }
 
@@ -722,24 +625,25 @@ function saveSettings() {
 
 function loadSettings() {
   const defaultDevice = guessDeviceName();
-
   try {
     const settings = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     els.noteEndpoint.value = settings.noteEndpoint || '';
-    els.noteSecret.value = settings.noteSecret || '';
-    els.noteLabel.value = settings.noteLabel || '';
+    els.noteSecret.value   = settings.noteSecret   || '';
+    els.noteLabel.value    = settings.noteLabel    || '';
     els.memoEndpoint.value = settings.memoEndpoint || '';
-    els.memoSecret.value = settings.memoSecret || '';
-    els.memoLabel.value = settings.memoLabel || '';
-    els.tags.value = settings.tags || 'idea, memo';
-    els.category.value = settings.category || 'Memo';
-    els.device.value = settings.device || defaultDevice;
+    els.memoSecret.value   = settings.memoSecret   || '';
+    els.memoLabel.value    = settings.memoLabel    || '';
+    els.tags.value         = settings.tags         || 'idea, memo';
+    els.category.value     = settings.category     || 'Memo';
+    els.device.value       = settings.device       || defaultDevice;
   } catch {
-    els.tags.value = 'idea, memo';
+    els.tags.value   = 'idea, memo';
     els.category.value = 'Memo';
     els.device.value = defaultDevice;
   }
 }
+
+// --- Utilities ---
 
 function guessDeviceName() {
   const ua = navigator.userAgent || '';
@@ -752,18 +656,11 @@ function guessDeviceName() {
 }
 
 function splitTags(value) {
-  return String(value || '')
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean);
+  return String(value || '').split(',').map((tag) => tag.trim()).filter(Boolean);
 }
 
 function makeTitle(text) {
-  const firstLine = String(text || '')
-    .split('\n')
-    .map((line) => line.trim())
-    .find(Boolean);
-
+  const firstLine = String(text || '').split('\n').map((line) => line.trim()).find(Boolean);
   return (firstLine || '新規ページ').slice(0, 80);
 }
 
@@ -775,20 +672,13 @@ function formatDate(value) {
 }
 
 function safeJsonParse(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 function escapeHtml(value) {
   return String(value || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
 function maskEndpoint(endpoint) {
@@ -797,33 +687,25 @@ function maskEndpoint(endpoint) {
 }
 
 function makeUuid() {
-  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-    return window.crypto.randomUUID();
-  }
-
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
   return 'client-' + Date.now() + '-' + Math.random().toString(36).slice(2);
 }
 
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
-  try {
-    await navigator.serviceWorker.register('./sw.js');
-  } catch (error) {
-    console.warn('Service Worker registration failed', error);
-  }
+  try { await navigator.serviceWorker.register('./sw.js'); } catch (error) { console.warn('Service Worker registration failed', error); }
 }
 
 function runSelfTests() {
   const tests = [
-    ['makeTitle first line', makeTitle('\n  Hello  \nWorld'), 'Hello'],
-    ['makeTitle fallback', makeTitle('  \n  '), '新規ページ'],
-    ['splitTags trims', JSON.stringify(splitTags(' a, ,b , c ')), JSON.stringify(['a', 'b', 'c'])],
-    ['formatDate invalid passthrough', formatDate('not-date'), 'not-date'],
-    ['safeJsonParse valid', safeJsonParse('{"ok":true}').ok, true],
-    ['safeJsonParse invalid', safeJsonParse('<html>') === null, true],
-    ['makeUuid returns value', typeof makeUuid() === 'string' && makeUuid().length > 8, true],
+    ['makeTitle first line',    makeTitle('\n  Hello  \nWorld'),          'Hello'],
+    ['makeTitle fallback',      makeTitle('  \n  '),                      '新規ページ'],
+    ['splitTags trims',         JSON.stringify(splitTags(' a, ,b , c ')), JSON.stringify(['a', 'b', 'c'])],
+    ['formatDate invalid',      formatDate('not-date'),                    'not-date'],
+    ['safeJsonParse valid',     safeJsonParse('{"ok":true}').ok,           true],
+    ['safeJsonParse invalid',   safeJsonParse('<html>') === null,          true],
+    ['makeUuid returns value',  typeof makeUuid() === 'string' && makeUuid().length > 8, true],
   ];
-
   tests.forEach(([name, actual, expected]) => {
     console.assert(actual === expected, `[test failed] ${name}`, { actual, expected });
   });
