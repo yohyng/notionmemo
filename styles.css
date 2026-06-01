@@ -586,7 +586,7 @@ input {
 }
 
 
-/* v0.3.4 simple memo title edit */
+/* v0.4.0 dual-db */
 :root {
   --panel: rgba(255, 255, 255, 0.035);
   --line: rgba(255, 255, 255, 0.085);
@@ -621,7 +621,7 @@ input {
 }
 
 .memo-input {
-  min-height: 320px;
+  min-height: 180px;
   margin: 22px 0;
   font-size: clamp(21px, 4.2vw, 32px);
 }
@@ -629,6 +629,33 @@ input {
 .settings-panel {
   padding: 14px;
   border-radius: 18px;
+}
+
+.settings-group-label {
+  margin: 8px 0 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.settings-group-label:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.send-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.send-button--memo {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--line);
+  color: var(--text);
 }
 
 .list-header {
@@ -685,7 +712,7 @@ input {
   }
 
   .memo-input {
-    min-height: 40dvh;
+    min-height: 26dvh;
   }
 
   .list-header {

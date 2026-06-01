@@ -17,7 +17,7 @@
         <div class="brand">
           <p>Quick Notion Capture</p>
           <h1>memo</h1>
-          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.3.4 simple-memo-title-edit</button>
+          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.4.0 dual-db</button>
         </div>
         <div class="top-actions">
           <button id="refreshButton" class="circle-button" type="button" title="最新メモを取得">↻</button>
@@ -28,37 +28,53 @@
       <textarea
         id="memoInput"
         class="memo-input"
-        placeholder="開いたらすぐメモ。Ctrl / Cmd + Enter で保存。"
+        placeholder="開いたらすぐメモ。Ctrl / Cmd + Enter で Note に保存。"
         autocomplete="off"
         spellcheck="false"
       ></textarea>
 
       <section id="settingsPanel" class="settings-panel hidden">
+        <p class="settings-group-label span-2">Note 送信先</p>
         <label class="span-2">
-          <span>GAS Endpoint</span>
-          <input id="endpointInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+          <span>Note Endpoint</span>
+          <input id="noteEndpointInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
         </label>
-
         <label>
-          <span>App Secret</span>
-          <input id="secretInput" type="password" placeholder="GAS側のAPP_SECRET" />
+          <span>Note Secret</span>
+          <input id="noteSecretInput" type="password" placeholder="GAS側のAPP_SECRET" />
+        </label>
+        <label>
+          <span>Note ボタン名</span>
+          <input id="noteLabelInput" type="text" placeholder="Note" />
         </label>
 
+        <p class="settings-group-label span-2">Memo 送信先</p>
+        <label class="span-2">
+          <span>Memo Endpoint</span>
+          <input id="memoEndpointInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+        </label>
+        <label>
+          <span>Memo Secret</span>
+          <input id="memoSecretInput" type="password" placeholder="GAS側のAPP_SECRET" />
+        </label>
+        <label>
+          <span>Memo ボタン名</span>
+          <input id="memoLabelInput" type="text" placeholder="Memo" />
+        </label>
+
+        <p class="settings-group-label span-2">共通設定</p>
         <label>
           <span>Device</span>
           <input id="deviceInput" type="text" placeholder="iPhone / iPad / PC" />
         </label>
-
         <label>
           <span>URL</span>
           <input id="urlInput" type="url" placeholder="https://..." />
         </label>
-
         <label>
           <span>Tags</span>
           <input id="tagsInput" type="text" placeholder="idea, memo" />
         </label>
-
         <label>
           <span>Category</span>
           <input id="categoryInput" type="text" placeholder="Memo" />
@@ -91,7 +107,10 @@
           <span id="statusDot" class="status-dot idle"></span>
           <span id="statusText">Ready</span>
         </div>
-        <button id="sendButton" class="send-button" type="button">Send</button>
+        <div class="send-actions">
+          <button id="sendNoteButton" class="send-button" type="button">Note</button>
+          <button id="sendMemoButton" class="send-button send-button--memo" type="button">Memo</button>
+        </div>
       </footer>
     </section>
 
@@ -162,18 +181,18 @@
         </div>
         <div>
           <dt>Version</dt>
-          <dd id="versionNumber">v0.3.4 simple-memo-title-edit</dd>
+          <dd id="versionNumber">v0.4.0 dual-db</dd>
         </div>
         <div>
           <dt>Build</dt>
-          <dd id="versionBuild">2026-05-06</dd>
+          <dd id="versionBuild">2026-06-01</dd>
         </div>
         <div>
           <dt>Sync Model</dt>
           <dd>Notion DB as source of truth</dd>
         </div>
       </dl>
-      <p class="version-note">画面を簡素化し、Recent Memosからタイトル編集できる版です。</p>
+      <p class="version-note">Note / Memo の2つの送信先DBをそれぞれ設定できる版です。</p>
     </form>
   </dialog>
 

@@ -1,7 +1,7 @@
-const APP_VERSION = 'v0.3.4 simple-memo-title-edit';
-const APP_BUILD = '2026-05-06';
+const APP_VERSION = 'v0.4.0 dual-db';
+const APP_BUILD = '2026-06-01';
 
-const STORAGE_KEY = 'instant_memo_settings_v3_diagnostics';
+const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
 const QUEUE_KEY = 'instant_memo_queue_v3_diagnostics';
 const CACHE_KEY = 'instant_memo_recent_cache_v3_diagnostics';
 
@@ -13,12 +13,17 @@ const els = {
   tags: $('tagsInput'),
   category: $('categoryInput'),
   device: $('deviceInput'),
-  endpoint: $('endpointInput'),
-  secret: $('secretInput'),
+  noteEndpoint: $('noteEndpointInput'),
+  noteSecret: $('noteSecretInput'),
+  noteLabel: $('noteLabelInput'),
+  memoEndpoint: $('memoEndpointInput'),
+  memoSecret: $('memoSecretInput'),
+  memoLabel: $('memoLabelInput'),
   settingsPanel: $('settingsPanel'),
   settingsToggle: $('settingsToggle'),
   saveSettings: $('saveSettingsButton'),
-  send: $('sendButton'),
+  sendNote: $('sendNoteButton'),
+  sendMemo: $('sendMemoButton'),
   refresh: $('refreshButton'),
   flushQueue: $('flushQueueButton'),
   diagnose: $('diagnoseButton'),
@@ -55,6 +60,7 @@ init();
 function init() {
   runSelfTests();
   loadSettings();
+  updateSendButtonLabels();
   renderQueueBadge();
   registerServiceWorker();
   renderCachedList();
@@ -67,6 +73,7 @@ function init() {
 
   els.saveSettings.addEventListener('click', () => {
     saveSettings();
+    updateSendButtonLabels();
     setStatus('設定を保存しました', 'success');
     els.memo.focus();
   });
@@ -79,7 +86,8 @@ function init() {
   els.closeVersion.addEventListener('click', () => els.versionDialog.close());
   els.diagnose.addEventListener('click', runDiagnostics);
 
-  els.send.addEventListener('click', createMemo);
+  els.sendNote.addEventListener('click', () => createMemo('note'));
+  els.sendMemo.addEventListener('click', () => createMemo('memo'));
   els.refresh.addEventListener('click', refreshList);
   els.flushQueue.addEventListener('click', flushQueue);
 
@@ -89,10 +97,10 @@ function init() {
   els.trash.addEventListener('click', trashMemo);
 
   els.memo.addEventListener('keydown', (event) => {
-    const isSubmit = (event.ctrlKey || event.metaKey) && event.key === 'Enter';
-    if (isSubmit) {
+    const isMod = event.ctrlKey || event.metaKey;
+    if (isMod && event.key === 'Enter') {
       event.preventDefault();
-      createMemo();
+      createMemo(event.shiftKey ? 'memo' : 'note');
     }
   });
 
@@ -103,6 +111,12 @@ function init() {
   });
 
   refreshList({ silent: true });
+}
+
+function updateSendButtonLabels() {
+  const settings = getSettings();
+  els.sendNote.textContent = settings.noteLabel || 'Note';
+  els.sendMemo.textContent = settings.memoLabel || 'Memo';
 }
 
 async function runDiagnostics() {
@@ -121,8 +135,8 @@ async function runDiagnostics() {
       displayModeStandalone: window.matchMedia('(display-mode: standalone)').matches,
       manifestLinked: Boolean(document.querySelector('link[rel="manifest"]')),
       serviceWorkerSupported: 'serviceWorker' in navigator,
-      endpointConfigured: Boolean(settings.endpoint),
-      secretConfigured: Boolean(settings.secret),
+      noteEndpointConfigured: Boolean(settings.noteEndpoint),
+      noteSecretConfigured: Boolean(settings.noteSecret),
       device: settings.device,
     },
     checks: [],
@@ -134,25 +148,25 @@ async function runDiagnostics() {
     els.diagnosticsRaw.textContent = JSON.stringify(raw, null, 2);
   }
 
-  setStatus('接続診断中...', 'sending');
+  setStatus('接続診断中（Note）...', 'sending');
 
-  if (!settings.endpoint) {
-    record('error', '1. PWA設定', 'GAS Endpointが未入力です。', null);
-    setStatus('診断停止：GAS Endpoint未入力', 'error');
+  if (!settings.noteEndpoint) {
+    record('error', '1. Note設定', 'Note Endpointが未入力です。', null);
+    setStatus('診断停止：Note Endpoint未入力', 'error');
     return;
   }
 
-  if (!settings.secret) {
-    record('error', '1. PWA設定', 'App Secretが未入力です。GASのScript Propertiesに入れたAPP_SECRETと同じ値を入れてください。', null);
-    setStatus('診断停止：App Secret未入力', 'error');
+  if (!settings.noteSecret) {
+    record('error', '1. Note設定', 'Note Secretが未入力です。GASのScript PropertiesのAPP_SECRETと同じ値を入れてください。', null);
+    setStatus('診断停止：Note Secret未入力', 'error');
     return;
   }
 
-  record('ok', '1. PWA設定', 'GAS EndpointとApp Secretは入力されています。', {
-    endpoint: maskEndpoint(settings.endpoint),
+  record('ok', '1. Note設定', 'Note EndpointとNote Secretは入力されています。', {
+    endpoint: maskEndpoint(settings.noteEndpoint),
   });
 
-  const pingUrl = settings.endpoint + (settings.endpoint.includes('?') ? '&' : '?') + 'diagnosticPing=' + Date.now();
+  const pingUrl = settings.noteEndpoint + (settings.noteEndpoint.includes('?') ? '&' : '?') + 'diagnosticPing=' + Date.now();
 
   try {
     const pingResponse = await fetch(pingUrl, {
@@ -189,7 +203,7 @@ async function runDiagnostics() {
     return;
   }
 
-  const diagnoseResult = await callApiDetailed({ action: 'diagnose' });
+  const diagnoseResult = await callApiDetailed({ action: 'diagnose' }, settings.noteEndpoint, settings.noteSecret);
 
   raw.diagnoseTransport = diagnoseResult;
 
@@ -209,7 +223,7 @@ async function runDiagnostics() {
     const msg = String(diagnoseResult.data.error || '');
 
     if (msg.includes('Unauthorized')) {
-      record('error', '3. APP_SECRET認証', 'APP_SECRETが一致していません。GASのScript PropertiesのAPP_SECRETと、PWA設定のApp Secretを完全一致させてください。', diagnoseResult.data);
+      record('error', '3. APP_SECRET認証', 'APP_SECRETが一致していません。GASのScript PropertiesのAPP_SECRETと、Note Secretを完全一致させてください。', diagnoseResult.data);
       setStatus('診断停止：APP_SECRET不一致', 'error');
       return;
     }
@@ -232,7 +246,7 @@ async function runDiagnostics() {
     return;
   }
 
-  const listResult = await callApiDetailed({ action: 'list', limit: 3 });
+  const listResult = await callApiDetailed({ action: 'list', limit: 3 }, settings.noteEndpoint, settings.noteSecret);
   raw.listTransport = listResult;
 
   if (!listResult.transportOk) {
@@ -248,7 +262,7 @@ async function runDiagnostics() {
   }
 
   record('ok', '5. listアクション', `Recent Memos取得に成功しました。取得件数: ${Array.isArray(listResult.data.items) ? listResult.data.items.length : 0}`, listResult.data);
-  setStatus('接続診断OK', 'success');
+  setStatus('接続診断OK（Note）', 'success');
 }
 
 function clearDiagnostics() {
@@ -267,17 +281,21 @@ function addDiagnosticStep(state, title, message) {
   els.diagnosticsSteps.appendChild(item);
 }
 
-async function createMemo() {
+async function createMemo(target = 'note') {
   const settings = getSettings();
   const memo = els.memo.value.trim();
+
+  const endpoint = target === 'memo' ? settings.memoEndpoint : settings.noteEndpoint;
+  const secret = target === 'memo' ? settings.memoSecret : settings.noteSecret;
+  const label = target === 'memo' ? (settings.memoLabel || 'Memo') : (settings.noteLabel || 'Note');
 
   if (!memo) {
     setStatus('メモが空です', 'error');
     return;
   }
 
-  if (!settings.endpoint || !settings.secret) {
-    setStatus('GAS EndpointとApp Secretを設定してください', 'error');
+  if (!endpoint || !secret) {
+    setStatus(`${label}のEndpointとSecretを設定してください`, 'error');
     els.settingsPanel.classList.remove('hidden');
     return;
   }
@@ -293,23 +311,24 @@ async function createMemo() {
     category: els.category.value.trim(),
     device: els.device.value.trim(),
     date: new Date().toISOString(),
+    _target: target,
   };
 
-  setStatus('送信中...', 'sending');
+  setStatus(`${label}に送信中...`, 'sending');
 
-  const res = await callApi(payload);
+  const res = await callApi(payload, endpoint, secret);
 
   if (res.ok) {
     els.memo.value = '';
     els.url.value = '';
-    setStatus('Notion DBに保存しました', 'success');
+    setStatus(`${label} DBに保存しました`, 'success');
     await refreshList({ silent: true });
     els.memo.focus();
     return;
   }
 
   enqueue(payload);
-  showApiError('作成に失敗しました。未送信キューに保存しました。', res);
+  showApiError(`${label}への作成に失敗しました。未送信キューに保存しました。`, res);
   renderQueueBadge();
 }
 
@@ -317,14 +336,14 @@ async function refreshList(options = {}) {
   const { silent = false } = options;
   const settings = getSettings();
 
-  if (!settings.endpoint || !settings.secret) {
-    if (!silent) setStatus('GAS EndpointとApp Secretを設定してください', 'error');
+  if (!settings.noteEndpoint || !settings.noteSecret) {
+    if (!silent) setStatus('Note のEndpointとSecretを設定してください', 'error');
     return;
   }
 
   if (!silent) setStatus('Notion DBを取得中...', 'sending');
 
-  const res = await callApi({ action: 'list', limit: 30 });
+  const res = await callApi({ action: 'list', limit: 30 }, settings.noteEndpoint, settings.noteSecret);
 
   if (!res.ok) {
     if (!silent) showApiError('取得に失敗しました', res);
@@ -381,7 +400,8 @@ function renderList(items) {
 }
 
 async function openMemo(pageId) {
-  const res = await callApi({ action: 'get', pageId });
+  const settings = getSettings();
+  const res = await callApi({ action: 'get', pageId }, settings.noteEndpoint, settings.noteSecret);
 
   if (!res.ok || !res.item) {
     showApiError('メモの取得に失敗しました', res);
@@ -406,6 +426,7 @@ function closeEditDialog() {
 async function updateMemo() {
   if (!currentEditingMemo) return;
 
+  const settings = getSettings();
   const payload = {
     action: 'update',
     pageId: currentEditingMemo.pageId,
@@ -425,7 +446,7 @@ async function updateMemo() {
   }
 
   setStatus('更新中...', 'sending');
-  const res = await callApi(payload);
+  const res = await callApi(payload, settings.noteEndpoint, settings.noteSecret);
 
   if (res.ok) {
     setStatus('更新しました', 'success');
@@ -448,6 +469,7 @@ async function updateMemo() {
 }
 
 async function duplicateMemo() {
+  const settings = getSettings();
   const payload = {
     action: 'create',
     clientId: makeUuid(),
@@ -458,6 +480,7 @@ async function duplicateMemo() {
     category: els.editCategory.value.trim(),
     device: els.device.value.trim(),
     date: new Date().toISOString(),
+    _target: 'note',
   };
 
   if (!payload.memo) {
@@ -466,7 +489,7 @@ async function duplicateMemo() {
   }
 
   setStatus('別メモとして保存中...', 'sending');
-  const res = await callApi(payload);
+  const res = await callApi(payload, settings.noteEndpoint, settings.noteSecret);
 
   if (res.ok) {
     setStatus('別メモとして保存しました', 'success');
@@ -486,12 +509,13 @@ async function trashMemo() {
   const confirmed = window.confirm('このメモをNotionのゴミ箱へ移動しますか？');
   if (!confirmed) return;
 
+  const settings = getSettings();
   setStatus('削除中...', 'sending');
   const res = await callApi({
     action: 'trash',
     pageId: currentEditingMemo.pageId,
     expectedLastEditedTime: currentEditingMemo.lastEditedTime,
-  });
+  }, settings.noteEndpoint, settings.noteSecret);
 
   if (res.ok) {
     setStatus('ゴミ箱へ移動しました', 'success');
@@ -510,6 +534,7 @@ async function trashMemo() {
 
 async function flushQueue() {
   const queue = getQueue();
+  const settings = getSettings();
 
   if (!queue.length) {
     setStatus('未送信メモはありません', 'idle');
@@ -520,7 +545,10 @@ async function flushQueue() {
 
   const rest = [];
   for (const item of queue) {
-    const res = await callApi(item);
+    const target = item._target || 'note';
+    const endpoint = target === 'memo' ? settings.memoEndpoint : settings.noteEndpoint;
+    const secret = target === 'memo' ? settings.memoSecret : settings.noteSecret;
+    const res = await callApi(item, endpoint, secret);
     if (!res.ok) rest.push(item);
   }
 
@@ -535,8 +563,8 @@ async function flushQueue() {
   }
 }
 
-async function callApi(payload) {
-  const result = await callApiDetailed(payload);
+async function callApi(payload, endpoint, secret) {
+  const result = await callApiDetailed(payload, endpoint, secret);
   if (!result.transportOk) {
     return {
       ok: false,
@@ -556,10 +584,7 @@ async function callApi(payload) {
   return result.data;
 }
 
-async function callApiDetailed(payload) {
-  const settings = getSettings();
-  const endpoint = settings.endpoint;
-
+async function callApiDetailed(payload, endpoint, secret) {
   const requestInfo = {
     endpoint: maskEndpoint(endpoint),
     action: payload.action,
@@ -573,7 +598,7 @@ async function callApiDetailed(payload) {
         'Content-Type': 'text/plain;charset=utf-8',
       },
       body: JSON.stringify({
-        secret: settings.secret,
+        secret,
         ...payload,
       }),
     });
@@ -616,7 +641,7 @@ function explainApiError(res) {
   const raw = JSON.stringify(res);
 
   if (String(res.error || '').includes('Unauthorized') || raw.includes('Unauthorized')) {
-    return 'APP_SECRETが一致していません。GASのScript PropertiesとPWA設定を確認してください。';
+    return 'APP_SECRETが一致していません。GASのScript PropertiesとSecretを確認してください。';
   }
 
   if (raw.includes('Missing NOTION_TOKEN')) {
@@ -679,8 +704,12 @@ function setStatus(text, state = 'idle') {
 
 function getSettings() {
   return {
-    endpoint: els.endpoint.value.trim(),
-    secret: els.secret.value.trim(),
+    noteEndpoint: els.noteEndpoint.value.trim(),
+    noteSecret: els.noteSecret.value.trim(),
+    noteLabel: els.noteLabel.value.trim(),
+    memoEndpoint: els.memoEndpoint.value.trim(),
+    memoSecret: els.memoSecret.value.trim(),
+    memoLabel: els.memoLabel.value.trim(),
     tags: els.tags.value.trim(),
     category: els.category.value.trim(),
     device: els.device.value.trim(),
@@ -696,8 +725,12 @@ function loadSettings() {
 
   try {
     const settings = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    els.endpoint.value = settings.endpoint || '';
-    els.secret.value = settings.secret || '';
+    els.noteEndpoint.value = settings.noteEndpoint || '';
+    els.noteSecret.value = settings.noteSecret || '';
+    els.noteLabel.value = settings.noteLabel || '';
+    els.memoEndpoint.value = settings.memoEndpoint || '';
+    els.memoSecret.value = settings.memoSecret || '';
+    els.memoLabel.value = settings.memoLabel || '';
     els.tags.value = settings.tags || 'idea, memo';
     els.category.value = settings.category || 'Memo';
     els.device.value = settings.device || defaultDevice;
