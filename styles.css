@@ -827,9 +827,11 @@ input {
 }
 
 #drawCanvas {
+  /* 絶対配置で wrap のレイアウト計算から切り離す（無限成長の防止） */
+  position: absolute;
+  top: 0;
+  left: 0;
   display: block;
-  width: 100%;
-  height: 100%;
   /* スクロール/ズームを止めてペン入力を専有（書き心地の要） */
   touch-action: none;
   -webkit-user-select: none;

@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.5.0 handwriting';
+const APP_VERSION = 'v0.5.1 handwriting';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -791,8 +791,12 @@ function setupCanvas() {
   if (rect.width === 0 || rect.height === 0) return;
   const dpr = window.devicePixelRatio || 1;
   // 高DPI（Retina相当）対応：内部解像度を物理ピクセルに合わせる
-  draw.canvas.width = Math.round(rect.width * dpr);
-  draw.canvas.height = Math.round(rect.height * dpr);
+  const needW = Math.round(rect.width * dpr);
+  const needH = Math.round(rect.height * dpr);
+  // 同サイズなら何もしない（ResizeObserverの無限ループ・再描画ちらつき防止）
+  if (draw.ready && draw.canvas.width === needW && draw.canvas.height === needH) return;
+  draw.canvas.width = needW;
+  draw.canvas.height = needH;
   draw.canvas.style.width = rect.width + 'px';
   draw.canvas.style.height = rect.height + 'px';
   draw.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
