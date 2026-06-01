@@ -17,13 +17,18 @@
         <div class="brand">
           <p>Quick Notion Capture</p>
           <h1>memo</h1>
-          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.4.1 per-db-diag</button>
+          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.5.0 handwriting</button>
         </div>
         <div class="top-actions">
           <button id="refreshButton" class="circle-button" type="button" title="最新メモを取得">↻</button>
           <button id="settingsToggle" class="circle-button" type="button" title="設定">⚙︎</button>
         </div>
       </header>
+
+      <div class="composer-tabs">
+        <button id="tabTextButton" class="composer-tab active" type="button">テキスト</button>
+        <button id="tabDrawButton" class="composer-tab" type="button">手書き</button>
+      </div>
 
       <textarea
         id="memoInput"
@@ -32,6 +37,29 @@
         autocomplete="off"
         spellcheck="false"
       ></textarea>
+
+      <section id="drawArea" class="draw-area hidden">
+        <div class="draw-toolbar">
+          <div class="draw-tools-left">
+            <button id="penToolButton" class="draw-tool-btn active" type="button" title="ペン">✎</button>
+            <button id="eraserToolButton" class="draw-tool-btn" type="button" title="消しゴム">⌫</button>
+            <div class="color-swatches">
+              <button class="color-swatch active" data-color="#1f1f1f" style="background:#1f1f1f;" type="button" aria-label="黒"></button>
+              <button class="color-swatch" data-color="#d24a4a" style="background:#d24a4a;" type="button" aria-label="赤"></button>
+              <button class="color-swatch" data-color="#3b6fd4" style="background:#3b6fd4;" type="button" aria-label="青"></button>
+              <button class="color-swatch" data-color="#3f9d58" style="background:#3f9d58;" type="button" aria-label="緑"></button>
+            </div>
+            <input id="penSizeInput" class="pen-size" type="range" min="1" max="14" value="3" title="太さ" />
+          </div>
+          <div class="draw-tools-right">
+            <button id="undoButton" class="draw-tool-btn" type="button" title="元に戻す">↶</button>
+            <button id="clearCanvasButton" class="draw-tool-btn" type="button" title="全消去">✕</button>
+          </div>
+        </div>
+        <div id="canvasWrap" class="canvas-wrap">
+          <canvas id="drawCanvas"></canvas>
+        </div>
+      </section>
 
       <section id="settingsPanel" class="settings-panel hidden">
 
@@ -204,7 +232,7 @@
         </div>
         <div>
           <dt>Version</dt>
-          <dd id="versionNumber">v0.4.1 per-db-diag</dd>
+          <dd id="versionNumber">v0.5.0 handwriting</dd>
         </div>
         <div>
           <dt>Build</dt>
@@ -215,7 +243,7 @@
           <dd>Notion DB as source of truth</dd>
         </div>
       </dl>
-      <p class="version-note">Note / Memo それぞれに独立した接続診断を追加した版です。</p>
+      <p class="version-note">手書きタブ（試験版）を追加。Galaxy Z Fold5のSペン向けに低遅延・筆圧対応の描画を追求しています。</p>
     </form>
   </dialog>
 

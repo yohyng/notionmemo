@@ -724,3 +724,131 @@ input {
     padding: 16px;
   }
 }
+
+
+/* v0.5.0 handwriting */
+.composer-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.composer-tab {
+  flex: 0 0 auto;
+  padding: 8px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+}
+
+.composer-tab.active {
+  color: var(--text);
+  border-color: rgba(215, 199, 167, 0.4);
+  background: rgba(215, 199, 167, 0.12);
+}
+
+.draw-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+  min-height: 300px;
+}
+
+.draw-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.draw-tools-left,
+.draw-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draw-tool-btn {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 16px;
+}
+
+.draw-tool-btn.active {
+  color: var(--text);
+  border-color: rgba(215, 199, 167, 0.4);
+  background: rgba(215, 199, 167, 0.12);
+}
+
+.color-swatches {
+  display: flex;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.color-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.color-swatch.active {
+  border-color: var(--text);
+}
+
+.pen-size {
+  width: 96px;
+  margin-left: 4px;
+  accent-color: var(--accent);
+}
+
+.canvas-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 240px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f7f5ef;
+  overflow: hidden;
+}
+
+#drawCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* スクロール/ズームを止めてペン入力を専有（書き心地の要） */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: crosshair;
+}
+
+@media (max-width: 640px) {
+  .draw-tool-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+
+  .pen-size {
+    width: 72px;
+  }
+
+  .canvas-wrap {
+    min-height: 50dvh;
+  }
+}

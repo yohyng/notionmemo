@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.4.1 per-db-diag';
+const APP_VERSION = 'v0.5.0 handwriting';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -56,9 +56,35 @@ const els = {
   update: $('updateButton'),
   duplicate: $('duplicateButton'),
   trash: $('trashButton'),
+  tabTextButton: $('tabTextButton'),
+  tabDrawButton: $('tabDrawButton'),
+  drawArea: $('drawArea'),
+  drawCanvas: $('drawCanvas'),
+  canvasWrap: $('canvasWrap'),
+  penTool: $('penToolButton'),
+  eraserTool: $('eraserToolButton'),
+  penSize: $('penSizeInput'),
+  undo: $('undoButton'),
+  clearCanvas: $('clearCanvasButton'),
 };
 
 let currentEditingMemo = null;
+let activeTab = 'text';
+
+const draw = {
+  canvas: null,
+  ctx: null,
+  strokes: [],
+  current: null,
+  tool: 'pen',
+  color: '#1f1f1f',
+  size: 3,
+  activePointerId: null,
+  rect: null,
+  cssWidth: 0,
+  cssHeight: 0,
+  ready: false,
+};
 
 init();
 
@@ -94,9 +120,13 @@ function init() {
   els.clearDiagnosticsNote.addEventListener('click', () => clearDiagnostics('note'));
   els.clearDiagnosticsMemo.addEventListener('click', () => clearDiagnostics('memo'));
 
-  els.sendNote.addEventListener('click', () => createMemo('note'));
-  els.sendMemo.addEventListener('click', () => createMemo('memo'));
+  els.sendNote.addEventListener('click', () => handleSend('note'));
+  els.sendMemo.addEventListener('click', () => handleSend('memo'));
   els.refresh.addEventListener('click', refreshList);
+
+  els.tabTextButton.addEventListener('click', () => setTab('text'));
+  els.tabDrawButton.addEventListener('click', () => setTab('draw'));
+  initHandwriting();
   els.flushQueue.addEventListener('click', flushQueue);
 
   els.closeEdit.addEventListener('click', closeEditDialog);
@@ -694,6 +724,338 @@ function makeUuid() {
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try { await navigator.serviceWorker.register('./sw.js'); } catch (error) { console.warn('Service Worker registration failed', error); }
+}
+
+// --- Tabs / send dispatch ---
+
+function handleSend(target) {
+  if (activeTab === 'draw') createHandwriting(target);
+  else createMemo(target);
+}
+
+function setTab(tab) {
+  activeTab = tab;
+  const isDraw = tab === 'draw';
+  els.tabTextButton.classList.toggle('active', !isDraw);
+  els.tabDrawButton.classList.toggle('active', isDraw);
+  els.memo.classList.toggle('hidden', isDraw);
+  els.drawArea.classList.toggle('hidden', !isDraw);
+  if (isDraw) {
+    requestAnimationFrame(setupCanvas);
+  } else {
+    requestAnimationFrame(() => els.memo.focus());
+  }
+}
+
+// --- Handwriting ---
+
+function initHandwriting() {
+  draw.canvas = els.drawCanvas;
+  // desynchronized: ブラウザ内のバッファリングを飛ばして低レイテンシ描画に寄せる
+  draw.ctx = draw.canvas.getContext('2d', { desynchronized: true });
+
+  els.penTool.addEventListener('click', () => setTool('pen'));
+  els.eraserTool.addEventListener('click', () => setTool('eraser'));
+  els.penSize.addEventListener('input', () => { draw.size = Number(els.penSize.value) || 3; });
+  els.undo.addEventListener('click', undoStroke);
+  els.clearCanvas.addEventListener('click', clearCanvas);
+
+  document.querySelectorAll('.color-swatch').forEach((swatch) => {
+    swatch.addEventListener('click', () => {
+      draw.color = swatch.dataset.color;
+      setTool('pen');
+      document.querySelectorAll('.color-swatch').forEach((s) => s.classList.toggle('active', s === swatch));
+    });
+  });
+
+  const c = draw.canvas;
+  c.addEventListener('pointerdown', onPointerDown);
+  c.addEventListener('pointermove', onPointerMove);
+  c.addEventListener('pointerup', onPointerUp);
+  c.addEventListener('pointercancel', onPointerUp);
+
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(() => { if (activeTab === 'draw') setupCanvas(); });
+    ro.observe(els.canvasWrap);
+  }
+}
+
+function setTool(tool) {
+  draw.tool = tool;
+  els.penTool.classList.toggle('active', tool === 'pen');
+  els.eraserTool.classList.toggle('active', tool === 'eraser');
+}
+
+function setupCanvas() {
+  const rect = els.canvasWrap.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  // 高DPI（Retina相当）対応：内部解像度を物理ピクセルに合わせる
+  draw.canvas.width = Math.round(rect.width * dpr);
+  draw.canvas.height = Math.round(rect.height * dpr);
+  draw.canvas.style.width = rect.width + 'px';
+  draw.canvas.style.height = rect.height + 'px';
+  draw.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw.cssWidth = rect.width;
+  draw.cssHeight = rect.height;
+  draw.ready = true;
+  redrawAll();
+}
+
+function pointerToCanvas(e) {
+  const rect = draw.rect || draw.canvas.getBoundingClientRect();
+  return {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
+    pressure: e.pressure && e.pressure > 0 ? e.pressure : 0.5,
+  };
+}
+
+function onPointerDown(e) {
+  if (!draw.ready) setupCanvas();
+  // パームリジェクション：すでに描画中のポインタがあれば無視（手のひら誤爆対策）
+  if (draw.activePointerId !== null) return;
+  e.preventDefault();
+  draw.activePointerId = e.pointerId;
+  draw.rect = draw.canvas.getBoundingClientRect();
+  const pt = pointerToCanvas(e);
+  draw.current = { tool: draw.tool, color: draw.color, size: draw.size, points: [pt] };
+  drawDot(pt, draw.current);
+  try { draw.canvas.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
+}
+
+function onPointerMove(e) {
+  if (draw.activePointerId !== e.pointerId || !draw.current) return;
+  e.preventDefault();
+  // 合体タッチ：1フレーム内に間引かれた中間点も全部拾って滑らかさを上げる
+  const events = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
+  for (const ev of events) {
+    draw.current.points.push(pointerToCanvas(ev));
+    drawLiveSegment();
+  }
+}
+
+function onPointerUp(e) {
+  if (draw.activePointerId !== e.pointerId) return;
+  if (draw.current && draw.current.points.length) draw.strokes.push(draw.current);
+  draw.current = null;
+  draw.activePointerId = null;
+}
+
+function midpoint(a, b) {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function lineWidthFor(stroke, pressure) {
+  if (stroke.tool === 'eraser') return stroke.size * 4 + 8;
+  // 筆圧で線幅を可変に（Sペンの強弱が出る）
+  return stroke.size * (0.4 + 0.9 * pressure);
+}
+
+function applyStrokeStyle(ctx, stroke) {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (stroke.tool === 'eraser') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = 'rgba(0,0,0,1)';
+  } else {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = stroke.color;
+  }
+}
+
+function drawDot(pt, stroke) {
+  const ctx = draw.ctx;
+  applyStrokeStyle(ctx, stroke);
+  const w = lineWidthFor(stroke, pt.pressure);
+  ctx.beginPath();
+  ctx.arc(pt.x, pt.y, Math.max(w / 2, 0.6), 0, Math.PI * 2);
+  ctx.fillStyle = stroke.tool === 'eraser' ? 'rgba(0,0,0,1)' : stroke.color;
+  ctx.fill();
+}
+
+// 直近の点だけを即時に描く（全再描画しないことで遅延を抑える）
+function drawLiveSegment() {
+  const pts = draw.current.points;
+  const n = pts.length;
+  if (n < 2) return;
+  const ctx = draw.ctx;
+  applyStrokeStyle(ctx, draw.current);
+  const p1 = pts[n - 2];
+  const p2 = pts[n - 1];
+  ctx.lineWidth = lineWidthFor(draw.current, (p1.pressure + p2.pressure) / 2);
+  ctx.beginPath();
+  if (n >= 3) {
+    const p0 = pts[n - 3];
+    const m1 = midpoint(p0, p1);
+    const m2 = midpoint(p1, p2);
+    ctx.moveTo(m1.x, m1.y);
+    ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
+  } else {
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+  }
+  ctx.stroke();
+}
+
+function drawWholeStroke(ctx, stroke) {
+  const pts = stroke.points;
+  if (pts.length === 1) { drawDot(pts[0], stroke); return; }
+  applyStrokeStyle(ctx, stroke);
+  for (let i = 1; i < pts.length; i++) {
+    const p1 = pts[i - 1];
+    const p2 = pts[i];
+    ctx.lineWidth = lineWidthFor(stroke, (p1.pressure + p2.pressure) / 2);
+    ctx.beginPath();
+    if (i >= 2) {
+      const p0 = pts[i - 2];
+      const m1 = midpoint(p0, p1);
+      const m2 = midpoint(p1, p2);
+      ctx.moveTo(m1.x, m1.y);
+      ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
+    } else {
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+    }
+    ctx.stroke();
+  }
+}
+
+function redrawAll() {
+  const ctx = draw.ctx;
+  ctx.clearRect(0, 0, draw.cssWidth, draw.cssHeight);
+  for (const stroke of draw.strokes) drawWholeStroke(ctx, stroke);
+}
+
+function undoStroke() {
+  draw.strokes.pop();
+  redrawAll();
+}
+
+function clearCanvas() {
+  draw.strokes = [];
+  draw.current = null;
+  redrawAll();
+}
+
+function isCanvasEmpty() {
+  return draw.strokes.length === 0 && !draw.current;
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve) => {
+    if (canvas.toBlob) canvas.toBlob((b) => resolve(b), type, quality);
+    else resolve(null);
+  });
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// 白背景を合成しつつ、5MB以内になるまでWebPの品質→サイズの順で落とす
+async function exportImageBlob() {
+  const srcW = draw.canvas.width;
+  const srcH = draw.canvas.height;
+  const maxEdge = 2048;
+  const longEdge = Math.max(srcW, srcH);
+  const scale = longEdge > maxEdge ? maxEdge / longEdge : 1;
+
+  let outW = Math.max(Math.round(srcW * scale), 1);
+  let outH = Math.max(Math.round(srcH * scale), 1);
+
+  const render = (w, h) => {
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const octx = out.getContext('2d');
+    octx.fillStyle = '#ffffff';
+    octx.fillRect(0, 0, w, h);
+    octx.drawImage(draw.canvas, 0, 0, w, h);
+    return out;
+  };
+
+  const maxBytes = 5 * 1024 * 1024;
+  let out = render(outW, outH);
+  let quality = 0.92;
+  let blob = await canvasToBlob(out, 'image/webp', quality);
+
+  while (blob && blob.size > maxBytes && quality > 0.4) {
+    quality -= 0.12;
+    blob = await canvasToBlob(out, 'image/webp', quality);
+  }
+
+  // それでも超える場合は解像度を段階的に縮小
+  while (blob && blob.size > maxBytes && Math.max(outW, outH) > 640) {
+    outW = Math.round(outW * 0.75);
+    outH = Math.round(outH * 0.75);
+    out = render(outW, outH);
+    blob = await canvasToBlob(out, 'image/webp', 0.8);
+  }
+
+  return blob;
+}
+
+async function createHandwriting(target) {
+  const settings = getSettings();
+  const endpoint = target === 'memo' ? settings.memoEndpoint : settings.noteEndpoint;
+  const secret   = target === 'memo' ? settings.memoSecret   : settings.noteSecret;
+  const label    = target === 'memo' ? (settings.memoLabel || 'Memo') : (settings.noteLabel || 'Note');
+
+  if (isCanvasEmpty()) { setStatus('手書きが空です', 'error'); return; }
+
+  if (!endpoint || !secret) {
+    setStatus(`${label}のEndpointとSecretを設定してください`, 'error');
+    els.settingsPanel.classList.remove('hidden');
+    return;
+  }
+
+  setStatus('画像を準備中...', 'sending');
+  const blob = await exportImageBlob();
+  if (!blob) { setStatus('画像の生成に失敗しました', 'error'); return; }
+
+  const sizeMb = (blob.size / (1024 * 1024)).toFixed(2);
+  const imageBase64 = await blobToBase64(blob);
+
+  saveSettings();
+
+  const now = new Date();
+  const payload = {
+    action: 'createImage',
+    clientId: makeUuid(),
+    imageBase64,
+    mimeType: blob.type || 'image/webp',
+    title: `手書き ${formatDate(now.toISOString())}`,
+    url: els.url.value.trim(),
+    tags: splitTags(els.tags.value),
+    category: els.category.value.trim(),
+    device: els.device.value.trim(),
+    date: now.toISOString(),
+    _target: target,
+  };
+
+  setStatus(`${label}に送信中... (${sizeMb}MB)`, 'sending');
+  const res = await callApi(payload, endpoint, secret);
+
+  if (res.ok) {
+    clearCanvas();
+    setStatus(`${label} DBに手書きを保存しました`, 'success');
+    await refreshList({ silent: true });
+    return;
+  }
+
+  enqueue(payload);
+  showApiError(`${label}への送信に失敗しました。未送信キューに保存しました。`, res, target);
+  renderQueueBadge();
 }
 
 function runSelfTests() {

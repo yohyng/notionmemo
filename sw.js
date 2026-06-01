@@ -1,4 +1,4 @@
-const CACHE_NAME = 'instant-memo-safe-sync-cache-v0.3.4-simple-memo-title-edit';
+const CACHE_NAME = 'instant-memo-safe-sync-cache-v0.5.0-handwriting';
 const ASSETS = [
   './',
   './index.html',
