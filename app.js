@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.5.2 handwriting';
+const APP_VERSION = 'v0.5.3 handwriting';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -150,9 +150,9 @@ function init() {
     refreshList();
   });
 
-  // 下書きの自動保存：入力のたびに（テキストはデバウンス）localStorageへ
-  els.memo.addEventListener('input', saveTextDraft);
-  els.url.addEventListener('input', saveTextDraft);
+  // 下書きの自動保存：入力のたびに即 localStorage へ（"入力して即閉じ"でも残す）
+  els.memo.addEventListener('input', saveTextDraftNow);
+  els.url.addEventListener('input', saveTextDraftNow);
   // タブを隠す/閉じる直前にデバウンス待ちの分も確実に書き出す
   window.addEventListener('pagehide', saveTextDraftNow);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveTextDraftNow(); });
@@ -1084,14 +1084,6 @@ async function createHandwriting(target) {
 // フリーズ/リロードで書きかけが消えないよう、端末内(localStorage)に自動保存する。
 // Notionへの送信とは独立。送信が成功したらその下書きは消す。
 
-function debounce(fn, wait) {
-  let timer = null;
-  return function () {
-    clearTimeout(timer);
-    timer = setTimeout(fn, wait);
-  };
-}
-
 function saveTextDraftNow() {
   try {
     const memo = els.memo.value;
@@ -1100,8 +1092,6 @@ function saveTextDraftNow() {
     localStorage.setItem(DRAFT_TEXT_KEY, JSON.stringify({ memo, url }));
   } catch (e) { /* プライベートモード等は無視 */ }
 }
-
-const saveTextDraft = debounce(saveTextDraftNow, 400);
 
 function clearTextDraft() {
   try { localStorage.removeItem(DRAFT_TEXT_KEY); } catch (e) { /* noop */ }
