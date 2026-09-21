@@ -1,9 +1,11 @@
-const APP_VERSION = 'v0.5.1 handwriting';
+const APP_VERSION = 'v0.5.2 handwriting';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
 const QUEUE_KEY = 'instant_memo_queue_v3_diagnostics';
 const CACHE_KEY = 'instant_memo_recent_cache_v3_diagnostics';
+const DRAFT_TEXT_KEY = 'instant_memo_draft_text_v1';
+const DRAFT_DRAW_KEY = 'instant_memo_draft_draw_v1';
 
 const $ = (id) => document.getElementById(id);
 
@@ -147,6 +149,18 @@ function init() {
     flushQueue();
     refreshList();
   });
+
+  // 下書きの自動保存：入力のたびに（テキストはデバウンス）localStorageへ
+  els.memo.addEventListener('input', saveTextDraft);
+  els.url.addEventListener('input', saveTextDraft);
+  // タブを隠す/閉じる直前にデバウンス待ちの分も確実に書き出す
+  window.addEventListener('pagehide', saveTextDraftNow);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveTextDraftNow(); });
+
+  // 起動時に前回の下書きを復元
+  const restoredText = loadTextDraft();
+  const restoredDraw = loadDrawDraft();
+  if (restoredText || restoredDraw) setStatus('下書きを復元しました', 'idle');
 
   refreshList({ silent: true });
 }
@@ -333,6 +347,7 @@ async function createMemo(target = 'note') {
   if (res.ok) {
     els.memo.value = '';
     els.url.value = '';
+    clearTextDraft();
     setStatus(`${label} DBに保存しました`, 'success');
     await refreshList({ silent: true });
     els.memo.focus();
@@ -844,6 +859,7 @@ function onPointerUp(e) {
   if (draw.current && draw.current.points.length) draw.strokes.push(draw.current);
   draw.current = null;
   draw.activePointerId = null;
+  saveDrawDraftNow();
 }
 
 function midpoint(a, b) {
@@ -934,12 +950,14 @@ function redrawAll() {
 function undoStroke() {
   draw.strokes.pop();
   redrawAll();
+  saveDrawDraftNow();
 }
 
 function clearCanvas() {
   draw.strokes = [];
   draw.current = null;
   redrawAll();
+  saveDrawDraftNow();
 }
 
 function isCanvasEmpty() {
@@ -1060,6 +1078,60 @@ async function createHandwriting(target) {
   enqueue(payload);
   showApiError(`${label}への送信に失敗しました。未送信キューに保存しました。`, res, target);
   renderQueueBadge();
+}
+
+// --- Draft (local autosave) ---
+// フリーズ/リロードで書きかけが消えないよう、端末内(localStorage)に自動保存する。
+// Notionへの送信とは独立。送信が成功したらその下書きは消す。
+
+function debounce(fn, wait) {
+  let timer = null;
+  return function () {
+    clearTimeout(timer);
+    timer = setTimeout(fn, wait);
+  };
+}
+
+function saveTextDraftNow() {
+  try {
+    const memo = els.memo.value;
+    const url = els.url.value;
+    if (!memo && !url) { localStorage.removeItem(DRAFT_TEXT_KEY); return; }
+    localStorage.setItem(DRAFT_TEXT_KEY, JSON.stringify({ memo, url }));
+  } catch (e) { /* プライベートモード等は無視 */ }
+}
+
+const saveTextDraft = debounce(saveTextDraftNow, 400);
+
+function clearTextDraft() {
+  try { localStorage.removeItem(DRAFT_TEXT_KEY); } catch (e) { /* noop */ }
+}
+
+function loadTextDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_TEXT_KEY) || 'null');
+    if (d && (d.memo || d.url)) {
+      if (d.memo) els.memo.value = d.memo;
+      if (d.url) els.url.value = d.url;
+      return true;
+    }
+  } catch (e) { /* noop */ }
+  return false;
+}
+
+function saveDrawDraftNow() {
+  try {
+    if (!draw.strokes.length) { localStorage.removeItem(DRAFT_DRAW_KEY); return; }
+    localStorage.setItem(DRAFT_DRAW_KEY, JSON.stringify(draw.strokes));
+  } catch (e) { /* Quota超過等は無視（描画は継続） */ }
+}
+
+function loadDrawDraft() {
+  try {
+    const s = JSON.parse(localStorage.getItem(DRAFT_DRAW_KEY) || 'null');
+    if (Array.isArray(s) && s.length) { draw.strokes = s; return true; }
+  } catch (e) { /* noop */ }
+  return false;
 }
 
 function runSelfTests() {
