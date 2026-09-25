@@ -17,7 +17,7 @@
         <div class="brand">
           <p>Quick Notion Capture</p>
           <h1>memo</h1>
-          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.5.3 handwriting</button>
+          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.6.0 fanout</button>
         </div>
         <div class="top-actions">
           <button id="refreshButton" class="circle-button" type="button" title="最新メモを取得">↻</button>
@@ -127,6 +127,17 @@
           </details>
         </section>
 
+        <!-- Memo の副送信先：TaskSpace -->
+        <p class="settings-group-label span-2">Memo の副送信先：TaskSpace（任意）</p>
+        <label class="span-2">
+          <span>TaskSpace Inbox Endpoint</span>
+          <input id="taskspaceEndpointInput" type="url" placeholder="https://<taskapp>.vercel.app/api/inbox" />
+        </label>
+        <label class="span-2">
+          <span>TaskSpace Inbox Secret</span>
+          <input id="taskspaceSecretInput" type="password" placeholder="INBOX_SECRET" />
+        </label>
+
         <!-- 共通設定 -->
         <p class="settings-group-label span-2">共通設定</p>
         <label>
@@ -232,7 +243,7 @@
         </div>
         <div>
           <dt>Version</dt>
-          <dd id="versionNumber">v0.5.3 handwriting</dd>
+          <dd id="versionNumber">v0.6.0 fanout</dd>
         </div>
         <div>
           <dt>Build</dt>
@@ -243,7 +254,7 @@
           <dd>Notion DB as source of truth</dd>
         </div>
       </dl>
-      <p class="version-note">書きかけのテキスト・手書きを端末内に自動保存。フリーズやリロードでも内容が残ります。</p>
+      <p class="version-note">Memoの送信をNotionとTaskSpaceの両方に配れるようにした版（ファンアウト・試験）。</p>
     </form>
   </dialog>
 

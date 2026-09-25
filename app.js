@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.5.3 handwriting';
+const APP_VERSION = 'v0.6.0 fanout';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -68,6 +68,8 @@ const els = {
   penSize: $('penSizeInput'),
   undo: $('undoButton'),
   clearCanvas: $('clearCanvasButton'),
+  taskspaceEndpoint: $('taskspaceEndpointInput'),
+  taskspaceSecret: $('taskspaceSecretInput'),
 };
 
 let currentEditingMemo = null;
@@ -343,19 +345,31 @@ async function createMemo(target = 'note') {
 
   setStatus(`${label}に送信中...`, 'sending');
   const res = await callApi(payload, endpoint, secret);
+  const notionOk = res.ok;
+  if (!notionOk) enqueue(payload);
 
-  if (res.ok) {
+  // 副送信先へのファンアウト（Memo → TaskSpace）。設定があるときだけ実行。
+  const results = [`Notion${notionOk ? '✓' : '✗'}`];
+  if (target === 'memo' && settings.taskspaceEndpoint && settings.taskspaceSecret) {
+    const ts = await sendToTaskSpace(memo, settings);
+    results.push(`TaskSpace${ts.ok ? '✓' : '✗'}`);
+    if (!ts.ok) enqueueTaskSpace(memo);
+  }
+
+  const summary = results.join(' / ');
+
+  if (notionOk) {
     els.memo.value = '';
     els.url.value = '';
     clearTextDraft();
-    setStatus(`${label} DBに保存しました`, 'success');
+    setStatus(`保存しました（${summary}）`, summary.includes('✗') ? 'error' : 'success');
     await refreshList({ silent: true });
     els.memo.focus();
+    renderQueueBadge();
     return;
   }
 
-  enqueue(payload);
-  showApiError(`${label}への作成に失敗しました。未送信キューに保存しました。`, res, target);
+  showApiError(`送信に失敗しました（${summary}）。未送信キューに保存しました。`, res, target);
   renderQueueBadge();
 }
 
@@ -550,11 +564,17 @@ async function flushQueue() {
 
   const rest = [];
   for (const item of queue) {
-    const target   = item._target || 'note';
-    const endpoint = target === 'memo' ? settings.memoEndpoint : settings.noteEndpoint;
-    const secret   = target === 'memo' ? settings.memoSecret   : settings.noteSecret;
-    const res = await callApi(item, endpoint, secret);
-    if (!res.ok) rest.push(item);
+    if (item._kind === 'taskspace') {
+      if (!settings.taskspaceEndpoint || !settings.taskspaceSecret) { rest.push(item); continue; }
+      const r = await sendToTaskSpace(item.title, settings);
+      if (!r.ok) rest.push(item);
+    } else {
+      const target   = item._target || 'note';
+      const endpoint = target === 'memo' ? settings.memoEndpoint : settings.noteEndpoint;
+      const secret   = target === 'memo' ? settings.memoSecret   : settings.noteSecret;
+      const res = await callApi(item, endpoint, secret);
+      if (!res.ok) rest.push(item);
+    }
   }
 
   localStorage.setItem(QUEUE_KEY, JSON.stringify(rest));
@@ -631,6 +651,33 @@ function enqueue(payload) {
   localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 }
 
+// TaskSpace(TRAY) へメモを1件送る副送信先。api/inbox が {ok:true} を返せば成功。
+async function sendToTaskSpace(title, settings) {
+  try {
+    const resp = await fetch(settings.taskspaceEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        secret: settings.taskspaceSecret,
+        title,
+        source: 'memo',
+        createdAt: new Date().toISOString().slice(0, 10),
+      }),
+    });
+    const text = await resp.text();
+    const data = safeJsonParse(text);
+    return { ok: resp.ok && Boolean(data && data.ok), status: resp.status, data };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+function enqueueTaskSpace(title) {
+  const queue = getQueue();
+  queue.push({ _kind: 'taskspace', title, source: 'memo', createdAt: new Date().toISOString().slice(0, 10) });
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+}
+
 function getQueue() {
   try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; }
 }
@@ -661,6 +708,8 @@ function getSettings() {
     tags:         els.tags.value.trim(),
     category:     els.category.value.trim(),
     device:       els.device.value.trim(),
+    taskspaceEndpoint: els.taskspaceEndpoint.value.trim(),
+    taskspaceSecret:   els.taskspaceSecret.value.trim(),
   };
 }
 
@@ -678,6 +727,8 @@ function loadSettings() {
     els.memoEndpoint.value = settings.memoEndpoint || '';
     els.memoSecret.value   = settings.memoSecret   || '';
     els.memoLabel.value    = settings.memoLabel    || '';
+    els.taskspaceEndpoint.value = settings.taskspaceEndpoint || '';
+    els.taskspaceSecret.value   = settings.taskspaceSecret   || '';
     els.tags.value         = settings.tags         || 'idea, memo';
     els.category.value     = settings.category     || 'Memo';
     els.device.value       = settings.device       || defaultDevice;
