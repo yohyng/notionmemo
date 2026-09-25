@@ -882,3 +882,15 @@ input {
   0%, 100% { box-shadow: 0 0 0 0 rgba(217, 135, 135, 0.5); }
   50% { box-shadow: 0 0 0 8px rgba(217, 135, 135, 0); }
 }
+
+#micDeviceSelect {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  outline: none;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 16px;
+}

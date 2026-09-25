@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.6.1 voice';
+const APP_VERSION = 'v0.6.2 mic-select';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -71,11 +71,14 @@ const els = {
   taskspaceEndpoint: $('taskspaceEndpointInput'),
   taskspaceSecret: $('taskspaceSecretInput'),
   mic: $('micButton'),
+  micDeviceSelect: $('micDeviceSelect'),
+  micRefresh: $('micRefreshButton'),
 };
 
 let currentEditingMemo = null;
 let activeTab = 'text';
 let voiceSupported = false;
+let savedMicDeviceId = '';
 
 const draw = {
   canvas: null,
@@ -134,6 +137,11 @@ function init() {
   els.tabDrawButton.addEventListener('click', () => setTab('draw'));
   initHandwriting();
   initVoiceInput();
+  els.micRefresh.addEventListener('click', refreshMicDevices);
+  els.micDeviceSelect.addEventListener('change', () => {
+    savedMicDeviceId = els.micDeviceSelect.value;
+    saveSettings();
+  });
   els.flushQueue.addEventListener('click', flushQueue);
 
   els.closeEdit.addEventListener('click', closeEditDialog);
@@ -713,6 +721,7 @@ function getSettings() {
     device:       els.device.value.trim(),
     taskspaceEndpoint: els.taskspaceEndpoint.value.trim(),
     taskspaceSecret:   els.taskspaceSecret.value.trim(),
+    micDeviceId:       savedMicDeviceId,
   };
 }
 
@@ -732,6 +741,7 @@ function loadSettings() {
     els.memoLabel.value    = settings.memoLabel    || '';
     els.taskspaceEndpoint.value = settings.taskspaceEndpoint || '';
     els.taskspaceSecret.value   = settings.taskspaceSecret   || '';
+    savedMicDeviceId            = settings.micDeviceId        || '';
     els.tags.value         = settings.tags         || 'idea, memo';
     els.category.value     = settings.category     || 'Memo';
     els.device.value       = settings.device       || defaultDevice;
@@ -823,6 +833,7 @@ function setTab(tab) {
 
 let recognition = null;
 let recognizing = false;
+let micStream = null;
 
 function initVoiceInput() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -853,20 +864,30 @@ function initVoiceInput() {
     els.mic.classList.remove('recording');
     els.memo.value = baseText + finalText;
     saveTextDraftNow();
+    stopMicStream();
     if (activeTab === 'text') setStatus('音声入力を停止しました', 'idle');
   };
 
   recognition.onerror = (event) => {
     recognizing = false;
     els.mic.classList.remove('recording');
+    stopMicStream();
     const msg = event.error === 'not-allowed'
       ? 'マイクの使用を許可してください'
       : `音声認識エラー: ${event.error}`;
     setStatus(msg, 'error');
   };
 
-  els.mic.addEventListener('click', () => {
+  els.mic.addEventListener('click', async () => {
     if (recognizing) { recognition.stop(); return; }
+    // 選択マイクを先に掴んでアクティブ化しておく（内蔵マイク優先を狙う。効果はブラウザ依存）
+    if (savedMicDeviceId) {
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: savedMicDeviceId } } });
+      } catch (err) {
+        micStream = null;
+      }
+    }
     const cur = els.memo.value;
     baseText = cur && !cur.endsWith('\n') ? cur + '\n' : cur;
     finalText = '';
@@ -877,8 +898,41 @@ function initVoiceInput() {
       setStatus('音声入力中… もう一度タップで停止', 'sending');
     } catch (err) {
       setStatus('音声入力を開始できませんでした', 'error');
+      stopMicStream();
     }
   });
+}
+
+function stopMicStream() {
+  if (micStream) {
+    micStream.getTracks().forEach((t) => t.stop());
+    micStream = null;
+  }
+}
+
+// マイクの一覧を取得して選択肢を作る（ラベル取得のため一度権限を求める）
+async function refreshMicDevices() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+    setStatus('この端末ではマイク一覧を取得できません', 'error');
+    return;
+  }
+  try {
+    const tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
+    tmp.getTracks().forEach((t) => t.stop());
+  } catch (err) {
+    setStatus('マイクの使用を許可してください', 'error');
+    return;
+  }
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter((d) => d.kind === 'audioinput');
+    els.micDeviceSelect.innerHTML = '<option value="">自動（OSデフォルト）</option>' +
+      mics.map((d, i) => `<option value="${escapeHtml(d.deviceId)}">${escapeHtml(d.label || ('マイク ' + (i + 1)))}</option>`).join('');
+    els.micDeviceSelect.value = savedMicDeviceId || '';
+    setStatus(`マイクを${mics.length}件検出しました`, 'success');
+  } catch (err) {
+    setStatus('マイク一覧の取得に失敗しました', 'error');
+  }
 }
 
 // --- Handwriting ---

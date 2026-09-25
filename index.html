@@ -17,7 +17,7 @@
         <div class="brand">
           <p>Quick Notion Capture</p>
           <h1>memo</h1>
-          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.6.1 voice</button>
+          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.6.2 mic-select</button>
         </div>
         <div class="top-actions">
           <button id="refreshButton" class="circle-button" type="button" title="最新メモを取得">↻</button>
@@ -158,6 +158,16 @@
           <input id="categoryInput" type="text" placeholder="Memo" />
         </label>
 
+        <label class="span-2">
+          <span>音声入力マイク（内蔵マイクを選ぶと精度が上がる場合あり・効果はブラウザ依存）</span>
+          <select id="micDeviceSelect">
+            <option value="">自動（OSデフォルト）</option>
+          </select>
+        </label>
+        <div class="span-2 settings-diag-row">
+          <button id="micRefreshButton" class="secondary-button" type="button">マイク一覧を更新</button>
+        </div>
+
         <div class="settings-actions span-2">
           <button id="saveSettingsButton" class="secondary-button" type="button">設定を保存</button>
           <button id="flushQueueButton" class="secondary-button" type="button">未送信を再送</button>
@@ -244,7 +254,7 @@
         </div>
         <div>
           <dt>Version</dt>
-          <dd id="versionNumber">v0.6.1 voice</dd>
+          <dd id="versionNumber">v0.6.2 mic-select</dd>
         </div>
         <div>
           <dt>Build</dt>
@@ -255,7 +265,7 @@
           <dd>Notion DB as source of truth</dd>
         </div>
       </dl>
-      <p class="version-note">テキストタブに音声入力（マイク）を追加。Memoの送信はNotionとTaskSpaceの両方へ配れます。</p>
+      <p class="version-note">音声入力のマイクを設定から選べるように（内蔵マイク優先を狙う・効果はブラウザ依存）。</p>
     </form>
   </dialog>
 
