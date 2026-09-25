@@ -854,3 +854,31 @@ input {
     min-height: 50dvh;
   }
 }
+
+
+/* v0.6.1 voice */
+.mic-button {
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 18px;
+}
+
+.mic-button.recording {
+  color: #1f1f1f;
+  background: var(--danger);
+  border-color: var(--danger);
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 135, 135, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(217, 135, 135, 0); }
+}

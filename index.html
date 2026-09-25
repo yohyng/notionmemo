@@ -17,7 +17,7 @@
         <div class="brand">
           <p>Quick Notion Capture</p>
           <h1>memo</h1>
-          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.6.0 fanout</button>
+          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.6.1 voice</button>
         </div>
         <div class="top-actions">
           <button id="refreshButton" class="circle-button" type="button" title="最新メモを取得">↻</button>
@@ -28,6 +28,7 @@
       <div class="composer-tabs">
         <button id="tabTextButton" class="composer-tab active" type="button">テキスト</button>
         <button id="tabDrawButton" class="composer-tab" type="button">手書き</button>
+        <button id="micButton" class="mic-button" type="button" title="音声入力">🎤</button>
       </div>
 
       <textarea
@@ -243,7 +244,7 @@
         </div>
         <div>
           <dt>Version</dt>
-          <dd id="versionNumber">v0.6.0 fanout</dd>
+          <dd id="versionNumber">v0.6.1 voice</dd>
         </div>
         <div>
           <dt>Build</dt>
@@ -254,7 +255,7 @@
           <dd>Notion DB as source of truth</dd>
         </div>
       </dl>
-      <p class="version-note">Memoの送信をNotionとTaskSpaceの両方に配れるようにした版（ファンアウト・試験）。</p>
+      <p class="version-note">テキストタブに音声入力（マイク）を追加。Memoの送信はNotionとTaskSpaceの両方へ配れます。</p>
     </form>
   </dialog>
 

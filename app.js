@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.6.0 fanout';
+const APP_VERSION = 'v0.6.1 voice';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -70,10 +70,12 @@ const els = {
   clearCanvas: $('clearCanvasButton'),
   taskspaceEndpoint: $('taskspaceEndpointInput'),
   taskspaceSecret: $('taskspaceSecretInput'),
+  mic: $('micButton'),
 };
 
 let currentEditingMemo = null;
 let activeTab = 'text';
+let voiceSupported = false;
 
 const draw = {
   canvas: null,
@@ -131,6 +133,7 @@ function init() {
   els.tabTextButton.addEventListener('click', () => setTab('text'));
   els.tabDrawButton.addEventListener('click', () => setTab('draw'));
   initHandwriting();
+  initVoiceInput();
   els.flushQueue.addEventListener('click', flushQueue);
 
   els.closeEdit.addEventListener('click', closeEditDialog);
@@ -806,11 +809,76 @@ function setTab(tab) {
   els.tabDrawButton.classList.toggle('active', isDraw);
   els.memo.classList.toggle('hidden', isDraw);
   els.drawArea.classList.toggle('hidden', !isDraw);
+  if (voiceSupported) els.mic.classList.toggle('hidden', isDraw);
   if (isDraw) {
     requestAnimationFrame(setupCanvas);
   } else {
     requestAnimationFrame(() => els.memo.focus());
   }
+}
+
+// --- Voice input (Web Speech API) ---
+// Android Chrome等の音声認識。認識結果をテキスト欄(memoInput)に追記する。
+// ※ブラウザによっては音声がクラウド(Google)側で認識される点に注意。
+
+let recognition = null;
+let recognizing = false;
+
+function initVoiceInput() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { els.mic.classList.add('hidden'); return; }
+  voiceSupported = true;
+
+  recognition = new SR();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  let baseText = '';   // 録音開始時点のテキスト
+  let finalText = '';  // 今回の録音で確定した分
+
+  recognition.onresult = (event) => {
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) finalText += transcript;
+      else interim += transcript;
+    }
+    els.memo.value = baseText + finalText + interim;
+    saveTextDraftNow();
+  };
+
+  recognition.onend = () => {
+    recognizing = false;
+    els.mic.classList.remove('recording');
+    els.memo.value = baseText + finalText;
+    saveTextDraftNow();
+    if (activeTab === 'text') setStatus('音声入力を停止しました', 'idle');
+  };
+
+  recognition.onerror = (event) => {
+    recognizing = false;
+    els.mic.classList.remove('recording');
+    const msg = event.error === 'not-allowed'
+      ? 'マイクの使用を許可してください'
+      : `音声認識エラー: ${event.error}`;
+    setStatus(msg, 'error');
+  };
+
+  els.mic.addEventListener('click', () => {
+    if (recognizing) { recognition.stop(); return; }
+    const cur = els.memo.value;
+    baseText = cur && !cur.endsWith('\n') ? cur + '\n' : cur;
+    finalText = '';
+    try {
+      recognition.start();
+      recognizing = true;
+      els.mic.classList.add('recording');
+      setStatus('音声入力中… もう一度タップで停止', 'sending');
+    } catch (err) {
+      setStatus('音声入力を開始できませんでした', 'error');
+    }
+  });
 }
 
 // --- Handwriting ---
