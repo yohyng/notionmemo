@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.6.3 mic-fix';
+const APP_VERSION = 'v0.6.4 voice-fix';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -843,41 +843,71 @@ function initVoiceInput() {
   recognition.continuous = true;
   recognition.interimResults = true;
 
-  let baseText = '';   // 録音開始時点のテキスト
-  let finalText = '';  // 今回の録音で確定した分
+  let baseText = '';        // 録音開始時点のテキスト
+  let committedText = '';   // 確定済みテキスト（認識セッションをまたいで積み上げる）
+  let sessionFinal = '';    // 現在の認識セッションで確定した分
+  let wantRecognition = false;  // ユーザーが録音継続を望むか（自動終了時に再開するか判定）
 
   recognition.onresult = (event) => {
+    // event.results は現セッションの全結果。毎回ゼロから組み立てる（+= しないので二重加算しない）
+    let finalAll = '';
     let interim = '';
-    for (let i = event.resultIndex; i < event.results.length; i++) {
+    for (let i = 0; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) finalText += transcript;
+      if (event.results[i].isFinal) finalAll += transcript;
       else interim += transcript;
     }
-    els.memo.value = baseText + finalText + interim;
+    sessionFinal = finalAll;
+    els.memo.value = baseText + committedText + finalAll + interim;
     saveTextDraftNow();
   };
 
   recognition.onend = () => {
+    // 現セッションの確定分を積み上げる（自動再開で失われないように）
+    committedText += sessionFinal;
+    sessionFinal = '';
+    // Android Chrome等は continuous でも数十秒（や無音）で自動終了する。
+    // ユーザーが止めていなければ黙って再開し、録音を継続させる。
+    if (wantRecognition) {
+      try {
+        recognition.start();
+      } catch (err) {
+        setTimeout(() => { if (wantRecognition) { try { recognition.start(); } catch (_) {} } }, 300);
+      }
+      return;
+    }
     recognizing = false;
     els.mic.classList.remove('recording');
-    els.memo.value = baseText + finalText;
+    els.memo.value = baseText + committedText;
     saveTextDraftNow();
     stopMicStream();
     if (activeTab === 'text') setStatus('音声入力を停止しました', 'idle');
   };
 
   recognition.onerror = (event) => {
-    recognizing = false;
-    els.mic.classList.remove('recording');
-    stopMicStream();
-    const msg = event.error === 'not-allowed'
-      ? 'マイクの使用を許可してください'
-      : `音声認識エラー: ${event.error}`;
-    setStatus(msg, 'error');
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      // 権限NGは継続不能なので停止
+      wantRecognition = false;
+      recognizing = false;
+      els.mic.classList.remove('recording');
+      stopMicStream();
+      setStatus('マイクの使用を許可してください', 'error');
+      return;
+    }
+    if (!wantRecognition) return; // 停止操作に伴う aborted などは無視
+    // no-speech は無音なだけ。onend 側で自動再開されるので黙って継続
+    if (event.error !== 'no-speech') {
+      setStatus(`音声認識: ${event.error}（継続中）`, 'idle');
+    }
   };
 
   els.mic.addEventListener('click', async () => {
-    if (recognizing) { recognition.stop(); return; }
+    if (wantRecognition) {
+      // 録音中 → 停止（onend で確定処理）
+      wantRecognition = false;
+      recognition.stop();
+      return;
+    }
     // 選択マイクを先に掴んでアクティブ化しておく（内蔵マイク優先を狙う。効果はブラウザ依存）
     if (savedMicDeviceId) {
       try {
@@ -888,13 +918,16 @@ function initVoiceInput() {
     }
     const cur = els.memo.value;
     baseText = cur && !cur.endsWith('\n') ? cur + '\n' : cur;
-    finalText = '';
+    committedText = '';
+    sessionFinal = '';
+    wantRecognition = true;
     try {
       recognition.start();
       recognizing = true;
       els.mic.classList.add('recording');
       setStatus('音声入力中… もう一度タップで停止', 'sending');
     } catch (err) {
+      wantRecognition = false;
       setStatus('音声入力を開始できませんでした', 'error');
       stopMicStream();
     }
