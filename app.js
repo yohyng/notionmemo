@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.6.2 mic-select';
+const APP_VERSION = 'v0.6.3 mic-fix';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -94,8 +94,6 @@ const draw = {
   cssHeight: 0,
   ready: false,
 };
-
-init();
 
 function init() {
   runSelfTests();
@@ -1311,3 +1309,7 @@ function runSelfTests() {
     console.assert(actual === expected, `[test failed] ${name}`, { actual, expected });
   });
 }
+
+// すべてのトップレベル宣言（recognition / micStream など）が済んだあとに起動する。
+// module は strict mode のため、宣言行より前の変数参照は TDZ で ReferenceError になる。
+init();
