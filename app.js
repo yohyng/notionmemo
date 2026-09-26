@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.6.5 mic-ui';
+const APP_VERSION = 'v0.6.6 voice-dedup';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -847,68 +847,72 @@ function initVoiceInput() {
   }
   voiceSupported = true;
 
-  recognition = new SR();
-  recognition.lang = 'ja-JP';
-  recognition.continuous = true;
-  recognition.interimResults = true;
-
   let baseText = '';        // 録音開始時点のテキスト
-  let committedText = '';   // 確定済みテキスト（認識セッションをまたいで積み上げる）
-  let sessionFinal = '';    // 現在の認識セッションで確定した分
+  let committedText = '';   // 確定済みテキスト（発話をまたいで積み上げる）
+  let sessionFinal = '';    // 現在の発話で確定した分
   let wantRecognition = false;  // ユーザーが録音継続を望むか（自動終了時に再開するか判定）
 
-  recognition.onresult = (event) => {
-    // event.results は現セッションの全結果。毎回ゼロから組み立てる（+= しないので二重加算しない）
-    let finalAll = '';
-    let interim = '';
-    for (let i = 0; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) finalAll += transcript;
-      else interim += transcript;
-    }
-    sessionFinal = finalAll;
-    els.memo.value = baseText + committedText + finalAll + interim;
-    saveTextDraftNow();
-  };
+  // Android Chrome は continuous=true だと確定結果を重複して返すことがある。
+  // そこで continuous=false（1発話ごとに確定）にし、認識オブジェクトを毎回
+  // 作り直しながら継続することで、前の発話の結果を引き継がず重複を防ぐ。
+  function buildRecognition() {
+    const r = new SR();
+    r.lang = 'ja-JP';
+    r.continuous = false;
+    r.interimResults = true;
 
-  recognition.onend = () => {
-    // 現セッションの確定分を積み上げる（自動再開で失われないように）
-    committedText += sessionFinal;
-    sessionFinal = '';
-    // Android Chrome等は continuous でも数十秒（や無音）で自動終了する。
-    // ユーザーが止めていなければ黙って再開し、録音を継続させる。
-    if (wantRecognition) {
-      try {
-        recognition.start();
-      } catch (err) {
-        setTimeout(() => { if (wantRecognition) { try { recognition.start(); } catch (_) {} } }, 300);
+    r.onresult = (event) => {
+      let finalAll = '';
+      let interim = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalAll += transcript;
+        else interim += transcript;
       }
-      return;
-    }
-    recognizing = false;
-    els.mic.classList.remove('recording');
-    els.memo.value = baseText + committedText;
-    saveTextDraftNow();
-    stopMicStream();
-    if (activeTab === 'text') setStatus('音声入力を停止しました', 'idle');
-  };
+      sessionFinal = finalAll;
+      els.memo.value = baseText + committedText + finalAll + interim;
+      saveTextDraftNow();
+    };
 
-  recognition.onerror = (event) => {
-    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-      // 権限NGは継続不能なので停止
-      wantRecognition = false;
+    r.onend = () => {
+      // この発話の確定分を積み上げる
+      committedText += sessionFinal;
+      sessionFinal = '';
+      if (wantRecognition) {
+        // 新しいインスタンスで継続（前発話の結果を引き継がない＝重複防止）
+        recognition = buildRecognition();
+        try {
+          recognition.start();
+        } catch (err) {
+          setTimeout(() => { if (wantRecognition) { try { recognition.start(); } catch (_) {} } }, 300);
+        }
+        return;
+      }
       recognizing = false;
       els.mic.classList.remove('recording');
+      els.memo.value = baseText + committedText;
+      saveTextDraftNow();
       stopMicStream();
-      setStatus('マイクの使用を許可してください', 'error');
-      return;
-    }
-    if (!wantRecognition) return; // 停止操作に伴う aborted などは無視
-    // no-speech は無音なだけ。onend 側で自動再開されるので黙って継続
-    if (event.error !== 'no-speech') {
-      setStatus(`音声認識: ${event.error}（継続中）`, 'idle');
-    }
-  };
+      if (activeTab === 'text') setStatus('音声入力を停止しました', 'idle');
+    };
+
+    r.onerror = (event) => {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        // 権限NGは継続不能なので停止
+        wantRecognition = false;
+        recognizing = false;
+        els.mic.classList.remove('recording');
+        stopMicStream();
+        setStatus('マイクの使用を許可してください', 'error');
+        return;
+      }
+      // no-speech / aborted などは onend 側で自動再開されるので黙って継続
+    };
+
+    return r;
+  }
+
+  recognition = buildRecognition();
 
   els.mic.addEventListener('click', async () => {
     if (wantRecognition) {

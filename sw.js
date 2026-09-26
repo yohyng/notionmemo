@@ -1,4 +1,4 @@
-const CACHE_NAME = 'instant-memo-safe-sync-cache-v0.6.5-mic-ui';
+const CACHE_NAME = 'instant-memo-safe-sync-cache-v0.6.6-voice-dedup';
 const ASSETS = [
   './',
   './index.html',
