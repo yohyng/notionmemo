@@ -17,7 +17,7 @@
         <div class="brand">
           <p>Quick Notion Capture</p>
           <h1>memo</h1>
-          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.6.4 voice-fix</button>
+          <button id="versionBadge" class="version-badge" type="button" title="バージョン情報">v0.6.5 mic-ui</button>
         </div>
         <div class="top-actions">
           <button id="refreshButton" class="circle-button" type="button" title="最新メモを取得">↻</button>
@@ -28,6 +28,10 @@
       <div class="composer-tabs">
         <button id="tabTextButton" class="composer-tab active" type="button">テキスト</button>
         <button id="tabDrawButton" class="composer-tab" type="button">手書き</button>
+        <select id="micDeviceSelect" class="mic-select" title="音声入力マイク">
+          <option value="">自動マイク</option>
+        </select>
+        <button id="micRefreshButton" class="mic-refresh" type="button" title="マイク一覧を更新">🔄</button>
         <button id="micButton" class="mic-button" type="button" title="音声入力">🎤</button>
       </div>
 
@@ -158,16 +162,6 @@
           <input id="categoryInput" type="text" placeholder="Memo" />
         </label>
 
-        <label class="span-2">
-          <span>音声入力マイク（内蔵マイクを選ぶと精度が上がる場合あり・効果はブラウザ依存）</span>
-          <select id="micDeviceSelect">
-            <option value="">自動（OSデフォルト）</option>
-          </select>
-        </label>
-        <div class="span-2 settings-diag-row">
-          <button id="micRefreshButton" class="secondary-button" type="button">マイク一覧を更新</button>
-        </div>
-
         <div class="settings-actions span-2">
           <button id="saveSettingsButton" class="secondary-button" type="button">設定を保存</button>
           <button id="flushQueueButton" class="secondary-button" type="button">未送信を再送</button>
@@ -254,7 +248,7 @@
         </div>
         <div>
           <dt>Version</dt>
-          <dd id="versionNumber">v0.6.4 voice-fix</dd>
+          <dd id="versionNumber">v0.6.5 mic-ui</dd>
         </div>
         <div>
           <dt>Build</dt>
@@ -265,7 +259,7 @@
           <dd>Notion DB as source of truth</dd>
         </div>
       </dl>
-      <p class="version-note">音声入力が数十秒で止まらないよう自動継続し、認識結果が重複して入る問題を修正。</p>
+      <p class="version-note">マイク選択を🎤の隣に配置（設定から移動）。🔄で一覧更新、ドロップダウンで選択。</p>
     </form>
   </dialog>
 

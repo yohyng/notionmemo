@@ -1,4 +1,4 @@
-const APP_VERSION = 'v0.6.4 voice-fix';
+const APP_VERSION = 'v0.6.5 mic-ui';
 const APP_BUILD = '2026-06-01';
 
 const STORAGE_KEY = 'instant_memo_settings_v4_dual_db';
@@ -817,7 +817,11 @@ function setTab(tab) {
   els.tabDrawButton.classList.toggle('active', isDraw);
   els.memo.classList.toggle('hidden', isDraw);
   els.drawArea.classList.toggle('hidden', !isDraw);
-  if (voiceSupported) els.mic.classList.toggle('hidden', isDraw);
+  if (voiceSupported) {
+    els.mic.classList.toggle('hidden', isDraw);
+    els.micDeviceSelect.classList.toggle('hidden', isDraw);
+    els.micRefresh.classList.toggle('hidden', isDraw);
+  }
   if (isDraw) {
     requestAnimationFrame(setupCanvas);
   } else {
@@ -835,7 +839,12 @@ let micStream = null;
 
 function initVoiceInput() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { els.mic.classList.add('hidden'); return; }
+  if (!SR) {
+    els.mic.classList.add('hidden');
+    els.micDeviceSelect.classList.add('hidden');
+    els.micRefresh.classList.add('hidden');
+    return;
+  }
   voiceSupported = true;
 
   recognition = new SR();

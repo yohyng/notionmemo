@@ -729,6 +729,8 @@ input {
 /* v0.5.0 handwriting */
 .composer-tabs {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   margin-top: 18px;
 }
@@ -858,7 +860,6 @@ input {
 
 /* v0.6.1 voice */
 .mic-button {
-  margin-left: auto;
   width: 40px;
   height: 40px;
   display: inline-flex;
@@ -884,13 +885,27 @@ input {
 }
 
 #micDeviceSelect {
-  width: 100%;
-  min-height: 44px;
-  padding: 11px 12px;
+  margin-left: auto;
+  max-width: 44vw;
+  min-height: 40px;
+  padding: 6px 10px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 12px;
   outline: none;
   color: var(--text);
   background: rgba(255, 255, 255, 0.045);
-  font-size: 16px;
+  font-size: 13px;
+}
+
+.mic-refresh {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 15px;
 }
